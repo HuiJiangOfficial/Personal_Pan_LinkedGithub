@@ -4,6 +4,12 @@
   --app-card: #ffffff;
 }
 
+html.dark:root {
+  color-scheme: dark;
+  --app-bg: #0d0d10;
+  --app-card: #141417;
+}
+
 html,
 body,
 #app {
@@ -14,6 +20,11 @@ body,
 body {
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'PingFang SC',
     'Microsoft YaHei', sans-serif;
+  background: var(--app-bg);
+  transition: background-color 0.25s ease;
+}
+
+html.dark body {
   background: var(--app-bg);
 }
 
