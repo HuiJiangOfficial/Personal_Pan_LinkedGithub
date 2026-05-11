@@ -6,6 +6,9 @@
 .env.local
 .env.*.local
 
+# Wrangler 本地缓存（勿提交，可能含账户缓存）
+.wrangler/
+
 # 依赖与构建产物
 node_modules/
 web/node_modules/

@@ -93,6 +93,24 @@ npx wrangler pages dev web -- npm run dev
 
 4. 首次部署完成后访问 Pages 分配的 **`*.pages.dev`** 域名即可（不要用 `*.workers.dev`）。
 
+### 控制台关于「Wrangler 配置文件」的警告
+
+若提示：**本地 `wrangler.toml` 需与 Pages 项目设置一致**，或建议**不要手写、应下载配置**，可按官方流程对齐：
+
+1. 本机安装 Node 后执行 **`npx wrangler login`**。  
+2. 在**本仓库根目录**执行（将 `<Pages项目名>` 换成控制台里该 Pages 的名称）：
+
+```bash
+npx wrangler pages download config <Pages项目名>
+```
+
+3. 若根目录已有 `wrangler.toml` 且命令询问是否覆盖，可按提示确认，或使用 **`--force`**（会覆盖本地文件，建议先 `git stash` 或备份）。  
+4. 打开生成/更新后的 `wrangler.toml`，**人工核对**是否仍包含本项目所需项，尤其是 **`pages_build_output_dir = "web/dist"`** 以及 **`[vars]`** 里的 `GITHUB_OWNER` / `GITHUB_REPO` / `GITHUB_BRANCH`（下载结果可能不包含你在 Git 里写的 `[vars]`，缺失则补回）。  
+5. **机密**（`GITHUB_TOKEN` 等）**不会**被下载进文件，仍只在控制台 **Secrets** 或通过 `wrangler pages secret put` 管理。  
+6. 确认无误后 `git commit` + `git push`，让 Git 集成部署使用与线上一致的配置。
+
+官方说明：[Wrangler `pages download config`](https://developers.cloudflare.com/workers/wrangler/commands/pages/#pages-download-config)（文档中标注为 **Experimental**）、[Pages Functions 与 wrangler.toml](https://developers.cloudflare.com/pages/functions/wrangler-configuration/)。
+
 > **构建环境变量**：若你不想在构建机读取仓库内 `config.js`，也可在 Cloudflare **Build** 环境变量里设置 `VITE_GITHUB_OWNER`、`VITE_GITHUB_REPO`、`VITE_GITHUB_BRANCH`，`sync-web-env.mjs` 会优先采用这些值写入 `web/.env.production`。
 
 ## 四、API 一览（Pages Functions）
