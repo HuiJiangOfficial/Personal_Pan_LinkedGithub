@@ -15,6 +15,6 @@ pages_build_output_dir = "web/dist"
 
 [vars]
 # 改成你的 GitHub 用户名/组织与仓库名（双引号内替换后提交）
-GITHUB_OWNER = "YOUR_GITHUB_USERNAME"
-GITHUB_REPO = "YOUR_REPO_NAME"
+GITHUB_OWNER = "HuiJiangOfficial"
+GITHUB_REPO = "Personal_Pan_LinkedGithub"
 GITHUB_BRANCH = "main"
