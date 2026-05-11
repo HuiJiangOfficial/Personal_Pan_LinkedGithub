@@ -1,21 +1,20 @@
 /**
  * GET /api/status
- * 返回站点配置状态（不含密钥）；无需访问密码
  */
 import { readEnv, jsonResponse, corsHeaders } from '../_utils.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
   const cfg = readEnv(env);
-  /** 仅布尔，不暴露密钥；便于排查「缺哪一项」 */
   const varsPresent = {
     GITHUB_OWNER: Boolean(cfg.owner),
     GITHUB_REPO: Boolean(cfg.repo),
     GITHUB_TOKEN: Boolean(cfg.token),
+    JWT_SECRET: Boolean(cfg.jwtSecret),
   };
   const res = jsonResponse({
     ok: true,
-    needPassword: Boolean(cfg.password),
+    needPassword: false,
     configured: Boolean(cfg.owner && cfg.repo && cfg.token),
     branch: cfg.branch || 'main',
     varsPresent,

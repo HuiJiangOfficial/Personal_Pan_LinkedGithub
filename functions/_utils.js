@@ -1,5 +1,5 @@
 /**
- * 通用工具：环境变量读取、CORS、密码校验、GitHub 请求封装
+ * 通用工具：环境变量读取、CORS、GitHub 请求封装
  */
 
 /** @param {Record<string, string | undefined>} env Cloudflare 绑定环境变量 */
@@ -8,8 +8,10 @@ export function readEnv(env) {
   const repo = env.GITHUB_REPO || '';
   const branch = env.GITHUB_BRANCH || 'main';
   const token = env.GITHUB_TOKEN || '';
-  const password = env.SITE_PASSWORD || '';
-  return { owner, repo, branch, token, password };
+  const jwtSecret = env.JWT_SECRET || '';
+  const adminUsername = env.ADMIN_USERNAME || 'admin';
+  const adminPassword = env.ADMIN_PASSWORD || '';
+  return { owner, repo, branch, token, jwtSecret, adminUsername, adminPassword };
 }
 
 export function assertEnv(cfg) {
@@ -25,22 +27,6 @@ export function assertEnv(cfg) {
   return null;
 }
 
-/**
- * 若设置了 SITE_PASSWORD，则校验请求头
- * 支持：X-Site-Password 或 Authorization: Bearer <密码>
- */
-export function checkPassword(request, cfg) {
-  if (!cfg.password) return null;
-  const headerPwd = request.headers.get('X-Site-Password') || '';
-  const auth = request.headers.get('Authorization') || '';
-  const bearer = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';
-  const provided = headerPwd || bearer;
-  if (provided !== cfg.password) {
-    return jsonResponse({ error: '未授权：访问密码错误或缺失' }, 401);
-  }
-  return null;
-}
-
 export function jsonResponse(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
     status,
@@ -51,16 +37,30 @@ export function jsonResponse(data, status = 200, extraHeaders = {}) {
   });
 }
 
+/** 合并 CORS；extraHeaders 可含 Set-Cookie */
+export function withCors(request, response, extraHeaders = {}) {
+  const h = new Headers(response.headers);
+  Object.entries(corsHeaders(request)).forEach(([k, v]) => h.set(k, v));
+  Object.entries(extraHeaders).forEach(([k, v]) => h.set(k, v));
+  return new Response(response.body, { status: response.status, headers: h });
+}
+
 /** @param {Request} request */
 export function corsHeaders(request) {
-  const origin = request.headers.get('Origin') || '*';
-  return {
-    'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Site-Password, Authorization',
+  const origin = request.headers.get('Origin');
+  const h = {
+    'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS, PATCH',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
   };
+  if (origin) {
+    h['Access-Control-Allow-Origin'] = origin;
+    h['Access-Control-Allow-Credentials'] = 'true';
+  } else {
+    h['Access-Control-Allow-Origin'] = '*';
+  }
+  return h;
 }
 
 /** 防止路径穿越；返回相对于 drive 的路径（不含 drive/ 前缀） */

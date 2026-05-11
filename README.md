@@ -7,7 +7,8 @@
 - 递归列出 `drive/` 下所有文件（Git Tree API）
 - 上传、下载、删除（GitHub Contents API）
 - 在线预览：常见图片、PDF、文本类源码与 Markdown 等（通过受鉴权代理拉取内容，避免 `<img>` 无法带密码的问题）
-- 简单访问密码（`SITE_PASSWORD`），校验在服务端完成
+- **用户与角色**：管理员（环境变量 `ADMIN_USERNAME` / `ADMIN_PASSWORD`）、普通用户（自注册，凭据写入仓库 `drive/.webpan/system/users.json`，密码为 **PBKDF2-SHA256 哈希**）、访客 `guest`（无密码；默认关闭，且默认不可见任何文件；管理员可开启并配置可见路径前缀）
+- 基于 **HttpOnly Cookie + JWT** 的登录态（`JWT_SECRET` 为机密）
 - 响应式布局，表格支持横向滚动，适配手机与桌面
 
 ## 目录结构
@@ -39,10 +40,10 @@
 
 | 类型 | 配置位置 |
 |------|----------|
-| **非机密**（`GITHUB_OWNER`、`GITHUB_REPO`、`GITHUB_BRANCH`） | 仓库根目录 **`wrangler.toml`** 的 **`[vars]`** 段，改好后 `git push` 触发重新部署。 |
-| **机密**（`GITHUB_TOKEN`、可选 `SITE_PASSWORD`） | **不要**写入 `wrangler.toml`。在 Cloudflare → **Pages 项目** → **变量和机密** → 添加 **机密（Secret）**；或使用命令行（需已 `wrangler login`）：`npx wrangler pages secret put GITHUB_TOKEN --project-name=<你的Pages项目名>`。 |
+| **非机密** | `GITHUB_OWNER`、`GITHUB_REPO`、`GITHUB_BRANCH` 写在 **`wrangler.toml` 的 `[vars]`**；可选 **`ADMIN_USERNAME`**（默认 `admin`）也可写在 `[vars]` 或控制台「变量」。 |
+| **机密** | `GITHUB_TOKEN`、`JWT_SECRET`、`ADMIN_PASSWORD` **不要**写入 `wrangler.toml`。在 Cloudflare → **Pages 项目** → **变量和机密** → **机密（Secret）**；或使用 `wrangler pages secret put`。 |
 
-Functions 运行时读取的是 **合并后的 `env`**：`[vars]` + 机密。缺任一必填项时，网页会提示「服务端未完成配置」。
+Functions 运行时读取的是 **合并后的 `env`**：`[vars]` + 机密。缺 GitHub 三项时网页会提示「服务端未完成配置」；缺 `JWT_SECRET` 或管理员密码时无法完成登录鉴权（见 `/api/status` 的 `varsPresent`）。
 
 ### 1. 根目录 `config.js`（可选：本地与构建时注入前端展示用 `VITE_*`）
 
@@ -59,7 +60,7 @@ copy config.example.js config.js   # Windows
 | `GITHUB_REPO` | 仓库名 |
 | `GITHUB_BRANCH` | 分支，默认 `main` |
 | `GITHUB_TOKEN` | 仅用于本地或 CI；**不要提交到 Git** |
-| `SITE_PASSWORD` | 访问站点时的简单密码；可为空表示不启用 |
+| （勿放 `config.js`） | `JWT_SECRET`、`ADMIN_USERNAME`、`ADMIN_PASSWORD` 仅在 Cloudflare 机密/变量或 `.dev.vars` 中配置，见上文与 `.dev.vars.example` |
 
 > **重要**：**`GITHUB_TOKEN` 不要提交到 Git**（勿写入 `wrangler.toml` / `config.js`）。线上仅通过 **机密** 注入。  
 > 若服务端配置已用 **`wrangler.toml` + 机密** 完成，根目录 **`config.js` 仍可省略**；此时构建阶段可在 Cloudflare **Build** 环境变量中设置 `VITE_GITHUB_OWNER`、`VITE_GITHUB_REPO`、`VITE_GITHUB_BRANCH`（与 `[vars]` 一致），以便页眉显示仓库名；或保留不含 Token 的 `config.js` 供 `sync-web-env.mjs` 生成 `web/.env.production`。
@@ -89,7 +90,7 @@ npx wrangler pages dev web -- npm run dev
 | **Root directory** | `/`（仓库根） |
 | **Build command** | `npm run build` |
 | **Build output directory** | `web/dist` |
-| **Environment variables** | 若账号要求 **仅用 wrangler.toml 管普通变量**：在 **`wrangler.toml` 的 `[vars]`** 填写 `GITHUB_OWNER`、`GITHUB_REPO`、`GITHUB_BRANCH`；在控制台 **仅添加机密** `GITHUB_TOKEN`（及可选 `SITE_PASSWORD`）。若控制台仍允许 **Build** 变量，可额外设置 `VITE_GITHUB_*` 供页眉展示。 |
+| **Environment variables** | 在 **`wrangler.toml` 的 `[vars]`** 填写 `GITHUB_OWNER`、`GITHUB_REPO`、`GITHUB_BRANCH`；在控制台添加机密 **`GITHUB_TOKEN`、`JWT_SECRET`、`ADMIN_PASSWORD`**（及可选 `ADMIN_USERNAME`）。若控制台仍允许 **Build** 变量，可额外设置 `VITE_GITHUB_*` 供页眉展示。 |
 
 4. 首次部署完成后访问 Pages 分配的 **`*.pages.dev`** 域名即可（不要用 `*.workers.dev`）。
 
@@ -106,7 +107,7 @@ npx wrangler pages download config <Pages项目名>
 
 3. 若根目录已有 `wrangler.toml` 且命令询问是否覆盖，可按提示确认，或使用 **`--force`**（会覆盖本地文件，建议先 `git stash` 或备份）。  
 4. 打开生成/更新后的 `wrangler.toml`，**人工核对**是否仍包含本项目所需项，尤其是 **`pages_build_output_dir = "web/dist"`** 以及 **`[vars]`** 里的 `GITHUB_OWNER` / `GITHUB_REPO` / `GITHUB_BRANCH`（下载结果可能不包含你在 Git 里写的 `[vars]`，缺失则补回）。  
-5. **机密**（`GITHUB_TOKEN` 等）**不会**被下载进文件，仍只在控制台 **Secrets** 或通过 `wrangler pages secret put` 管理。  
+5. **机密**（`GITHUB_TOKEN`、`JWT_SECRET`、`ADMIN_PASSWORD` 等）**不会**被下载进文件，仍只在控制台 **Secrets** 或通过 `wrangler pages secret put` 管理。  
 6. 确认无误后 `git commit` + `git push`，让 Git 集成部署使用与线上一致的配置。
 
 官方说明：[Wrangler `pages download config`](https://developers.cloudflare.com/workers/wrangler/commands/pages/#pages-download-config)（文档中标注为 **Experimental**）、[Pages Functions 与 wrangler.toml](https://developers.cloudflare.com/pages/functions/wrangler-configuration/)。
@@ -117,25 +118,29 @@ npx wrangler pages download config <Pages项目名>
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/status` | 是否已配置、是否需要访问密码（无需密码头） |
-| POST | `/api/verify` | JSON `{ "password": "..." }` 校验密码 |
-| GET | `/api/list` | 列出 `drive/` 下文件；需密码头（若启用密码） |
+| GET | `/api/status` | 是否已配置、`varsPresent`（含 `JWT_SECRET`） |
+| GET | `/api/auth/me` | 当前登录用户与角色（需 Cookie） |
+| POST | `/api/auth/login` | JSON `{ username, password }` |
+| POST | `/api/auth/register` | 注册普通用户（受 `registrationEnabled` 控制） |
+| POST | `/api/auth/guest` | 访客登录（需管理员开启 `guestEnabled`） |
+| POST | `/api/auth/logout` | 清除会话 |
+| GET/POST/DELETE | `/api/admin/users` | 管理员：用户列表、添加、删除 |
+| POST | `/api/admin/password` | 管理员：重置普通用户密码（写入新哈希，**无法查看**旧明文） |
+| GET/PATCH | `/api/admin/settings` | 管理员：`guestEnabled`、`registrationEnabled`、`guestPaths` |
+| GET | `/api/list` | 列出 `drive/` 下文件（需登录；隐藏 `.webpan`；访客按白名单过滤） |
 | GET | `/api/raw?path=` | 代理文件内容；`download=1` 触发下载响应头 |
-| POST | `/api/upload` | `multipart/form-data`，字段 `file`，可选 `path`（子路径或目录前缀） |
-| DELETE | `/api/file?path=` | 删除文件 |
+| POST | `/api/upload` | `multipart/form-data`，字段 `file`，可选 `path`（访客不可写） |
+| DELETE | `/api/file?path=` | 删除文件（访客不可写） |
 
-鉴权请求头（启用 `SITE_PASSWORD` 时）：
+鉴权：登录成功后由服务端设置 **`HttpOnly` Cookie**（`webpan_session`），浏览器对 `/api/*` 请求需 **`credentials: 'include'`**（前端已配置）。本地非 HTTPS 可设 `COOKIE_SECURE=false` 以便写入 Cookie。
 
-- `X-Site-Password: <密码>`，或
-- `Authorization: Bearer <密码>`
-
-跨域由 `functions/_middleware.js` 统一添加 CORS 响应头。
+跨域由 `functions/_middleware.js` 与各 handler 统一添加 CORS（含 `Credentials`）。
 
 ## 五、限制与说明
 
 - GitHub API 有速率与单文件大小限制；本项目中上传在 Worker 内做了约 **45MB** 的保守限制，过大文件请考虑 Git LFS 或其它存储。
 - 目录树使用 **recursive tree**；若仓库极大，`truncated` 可能为 `true`，界面会提示。
-- 访问密码为**简单对称口令**，仅适合防随手访问；更高安全需求请叠加 Cloudflare Access 或 OAuth 等方案。
+- 普通用户密码在仓库中仅存 **PBKDF2 哈希**；管理员重置密码会覆盖为新哈希，**不能反查明文**。更高安全需求可叠加 Cloudflare Access 或 OAuth。
 - **切勿**把 `GITHUB_TOKEN` 写进前端代码或公开 `config.js`。
 
 ## 六、开源协议

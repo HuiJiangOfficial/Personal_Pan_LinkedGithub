@@ -1,5 +1,9 @@
-# 基于 `wrangler pages download config` 结果整理：请勿把 GITHUB_TOKEN 写入本文件。
-# 机密请在 Cloudflare Pages → 变量和机密 → 「机密」添加，或：npx wrangler pages secret put GITHUB_TOKEN --project-name=personal-pan-linkedgithub
+# 基于 `wrangler pages download config` 结果整理：请勿把 GITHUB_TOKEN / JWT_SECRET / ADMIN_PASSWORD 写入本文件。
+# 机密请在 Cloudflare Pages → 变量和机密 → 「机密」添加，例如：
+#   npx wrangler pages secret put GITHUB_TOKEN --project-name=<Pages项目名>
+#   npx wrangler pages secret put JWT_SECRET --project-name=<Pages项目名>
+#   npx wrangler pages secret put ADMIN_PASSWORD --project-name=<Pages项目名>
+# 非机密的 ADMIN_USERNAME 可放在 [vars] 或控制台「变量」。
 # 添加/修改机密后务必在 Deployments 里 Retry deployment，否则 Functions 可能仍读不到。
 #
 name = "personal-pan-linkedgithub"

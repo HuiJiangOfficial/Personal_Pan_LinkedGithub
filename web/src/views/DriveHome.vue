@@ -13,23 +13,25 @@
             <el-divider direction="vertical" class="subtitle__div" />
             <span>分支 {{ status.branch || publicConfig.branch }}</span>
             <el-tag v-if="status.truncated" type="warning" size="small" effect="plain" class="subtitle__tag">树可能被截断</el-tag>
+            <el-tag v-if="me.role" type="info" size="small" effect="plain" class="subtitle__tag">{{ roleLabel }}</el-tag>
           </p>
         </div>
         <div class="hero__actions">
           <el-tooltip content="深色模式" placement="bottom">
             <el-button :icon="isDark ? Sunny : Moon" circle @click="toggleDark" />
           </el-tooltip>
+          <el-button v-if="me.role === 'admin'" type="warning" plain @click="goAdmin">管理后台</el-button>
           <el-button type="primary" :icon="Refresh" :loading="loading" @click="loadFiles">刷新</el-button>
           <el-upload
             :show-file-list="false"
-            :disabled="!status.configured"
+            :disabled="!canMutateDrive"
             :http-request="handleUpload"
             multiple
             class="upload-inline"
           >
             <el-button type="success" :icon="UploadFilled">选择文件</el-button>
           </el-upload>
-          <el-button v-if="status.needPassword" link type="danger" @click="onReLogin">重新登录</el-button>
+          <el-button link type="danger" @click="logout">退出登录</el-button>
         </div>
       </div>
 
@@ -118,7 +120,7 @@
                 <el-button link type="primary" @click="openPreview(row)">预览</el-button>
                 <el-button link type="primary" @click="downloadFile(row)">下载</el-button>
                 <el-button link type="primary" @click="copyPath(row)">复制路径</el-button>
-                <el-button link type="danger" @click="removeFile(row)">删除</el-button>
+                <el-button v-if="canMutateDrive" link type="danger" @click="removeFile(row)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -161,7 +163,7 @@
                       <el-dropdown-item command="preview">预览</el-dropdown-item>
                       <el-dropdown-item command="download">下载</el-dropdown-item>
                       <el-dropdown-item command="copy">复制路径</el-dropdown-item>
-                      <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+                      <el-dropdown-item v-if="canMutateDrive" command="delete" divided>删除</el-dropdown-item>
                     </el-dropdown-menu>
                   </template>
                 </el-dropdown>
@@ -183,7 +185,7 @@
           drag
           multiple
           :show-file-list="false"
-          :disabled="!status.configured"
+          :disabled="!canMutateDrive"
           :http-request="handleUpload"
           class="upload-drag"
         >
@@ -192,15 +194,6 @@
         </el-upload>
       </el-card>
     </el-main>
-
-    <el-dialog v-model="loginVisible" title="访问验证" width="min(92vw, 420px)" :close-on-click-modal="false" @closed="onLoginClosed" class="login-dialog">
-      <p class="hint">请输入站点访问密码（由管理员在环境变量 SITE_PASSWORD 中设置）。</p>
-      <el-input v-model="loginPwd" type="password" show-password placeholder="访问密码" @keyup.enter="submitLogin" />
-      <template #footer>
-        <el-button @click="loginVisible = false">取消</el-button>
-        <el-button type="primary" :loading="loginLoading" @click="submitLogin">确定</el-button>
-      </template>
-    </el-dialog>
 
     <el-drawer
       v-model="preview.visible"
@@ -240,6 +233,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   Refresh,
@@ -258,17 +252,15 @@ import {
   Download,
   DocumentCopy,
 } from '@element-plus/icons-vue';
-import { http, getStoredPassword, setStoredPassword } from '@/api/http.js';
+import { http } from '@/api/http.js';
 import { publicConfig } from '@/config.js';
 import { createTransferTask, transferState } from '@/composables/transferTasks.js';
 import TransferDock from '@/components/TransferDock.vue';
 
+const router = useRouter();
 const DARK_KEY = 'github_web_pan_dark';
 
 const loading = ref(false);
-const loginLoading = ref(false);
-const loginVisible = ref(false);
-const loginPwd = ref('');
 const isMobile = ref(false);
 const isDark = ref(false);
 const keyword = ref('');
@@ -277,10 +269,14 @@ const uploadSubfolder = ref('');
 
 const status = reactive({
   configured: true,
-  needPassword: false,
   branch: publicConfig.branch,
   truncated: false,
   varsPresent: {},
+});
+
+const me = reactive({
+  user: '',
+  role: /** @type {''|'admin'|'user'|'guest'} */ (''),
 });
 
 const files = ref([]);
@@ -317,14 +313,24 @@ const displayRepo = computed(() => {
   return '（构建时未注入仓库名）';
 });
 
+const canMutateDrive = computed(() => status.configured && me.role !== 'guest');
+
+const roleLabel = computed(() => {
+  if (me.role === 'admin') return '管理员';
+  if (me.role === 'user') return `用户 · ${me.user}`;
+  if (me.role === 'guest') return '访客（只读·白名单）';
+  return '';
+});
+
 const configAlertDescription = computed(() => {
   const v = status.varsPresent || {};
   const o = v.GITHUB_OWNER === true ? '已检测到' : '未检测到';
   const r = v.GITHUB_REPO === true ? '已检测到' : '未检测到';
   const t = v.GITHUB_TOKEN === true ? '已检测到' : '未检测到';
+  const j = v.JWT_SECRET === true ? '已检测到' : '未检测到';
   return [
-    `服务端自检：GITHUB_OWNER ${o}；GITHUB_REPO ${r}；GITHUB_TOKEN ${t}。`,
-    '请检查 wrangler.toml 的 [vars] 与 [env.production.vars]；生产环境机密 GITHUB_TOKEN；修改机密后 Retry deployment。',
+    `服务端自检：GITHUB_OWNER ${o}；GITHUB_REPO ${r}；GITHUB_TOKEN ${t}；JWT_SECRET ${j}。`,
+    '请在机密中配置 JWT_SECRET、ADMIN_USERNAME、ADMIN_PASSWORD；并检查 wrangler.toml 与 GitHub Token。',
   ].join('');
 });
 
@@ -398,7 +404,6 @@ async function bootstrap() {
   try {
     const { data } = await http.get('/api/status');
     status.configured = Boolean(data.configured);
-    status.needPassword = Boolean(data.needPassword);
     status.branch = data.branch || status.branch;
     if (data.varsPresent && typeof data.varsPresent === 'object') {
       status.varsPresent = { ...data.varsPresent };
@@ -408,71 +413,35 @@ async function bootstrap() {
       return;
     }
 
-    if (status.needPassword) {
-      const saved = getStoredPassword();
-      if (saved) {
-        const ok = await tryVerify(saved);
-        if (!ok) {
-          setStoredPassword('');
-          loginVisible.value = true;
-          return;
-        }
-      } else {
-        loginVisible.value = true;
-        return;
-      }
+    const meRes = await http.get('/api/auth/me');
+    if (meRes.data?.authenticated) {
+      me.user = meRes.data.user || '';
+      me.role = meRes.data.role || '';
     }
 
     await loadFiles();
   } catch {
-    ElMessage.error('无法连接后端 /api/status，请确认已部署到 Cloudflare Pages');
+    ElMessage.error('无法连接后端，请确认已部署到 Cloudflare Pages');
   }
 }
 
-async function tryVerify(pwd) {
+async function logout() {
   try {
-    const { data } = await http.post('/api/verify', { password: pwd });
-    return Boolean(data?.ok);
+    await http.post('/api/auth/logout');
   } catch {
-    return false;
+    /* ignore */
   }
+  me.user = '';
+  me.role = '';
+  await router.push('/login');
 }
 
-async function submitLogin() {
-  loginLoading.value = true;
-  try {
-    const { data } = await http.post('/api/verify', { password: loginPwd.value });
-    if (data?.ok) {
-      setStoredPassword(loginPwd.value);
-      loginVisible.value = false;
-      loginPwd.value = '';
-      ElMessage.success('验证通过');
-      await loadFiles();
-    }
-  } catch {
-    /* 拦截器已提示 */
-  } finally {
-    loginLoading.value = false;
-  }
-}
-
-function onLoginClosed() {
-  if (status.needPassword && !getStoredPassword()) {
-    ElMessage.warning('未通过验证时无法列出文件');
-  }
-}
-
-function onReLogin() {
-  setStoredPassword('');
-  loginVisible.value = true;
+function goAdmin() {
+  router.push('/admin');
 }
 
 async function loadFiles() {
   if (!status.configured) return;
-  if (status.needPassword && !getStoredPassword()) {
-    loginVisible.value = true;
-    return;
-  }
   loading.value = true;
   try {
     const { data } = await http.get('/api/list');
@@ -481,7 +450,7 @@ async function loadFiles() {
     if (data.branch) status.branch = data.branch;
   } catch (e) {
     if (e?.response?.status === 401) {
-      loginVisible.value = true;
+      await router.replace('/login');
     }
   } finally {
     loading.value = false;

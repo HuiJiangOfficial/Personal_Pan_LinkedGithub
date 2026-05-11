@@ -1,7 +1,6 @@
 <template>
-  <DriveHome />
+  <router-view />
 </template>
 
 <script setup>
-import DriveHome from './views/DriveHome.vue';
 </script>
