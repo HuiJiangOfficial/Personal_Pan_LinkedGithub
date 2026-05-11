@@ -1,0 +1,7 @@
+# 本地开发可参考：https://developers.cloudflare.com/pages/functions/local-development/
+# 使用：在项目根目录执行 npx wrangler pages dev web -- npm run dev
+# 敏感变量请写入 .dev.vars（勿提交），格式见 .dev.vars.example
+
+name = "github-web-pan"
+compatibility_date = "2024-10-22"
+pages_build_output_dir = "web/dist"

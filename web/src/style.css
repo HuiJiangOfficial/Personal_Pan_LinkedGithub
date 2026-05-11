@@ -1,0 +1,25 @@
+:root {
+  color-scheme: light;
+  --app-bg: #f3f5f9;
+  --app-card: #ffffff;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'PingFang SC',
+    'Microsoft YaHei', sans-serif;
+  background: var(--app-bg);
+}
+
+/* 移动端表格横向滚动更顺滑 */
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}

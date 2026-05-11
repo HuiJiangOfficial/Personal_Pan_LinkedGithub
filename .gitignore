@@ -1,0 +1,13 @@
+# 本地配置（含密钥，切勿提交）
+config.js
+.dev.vars
+.env
+.env.local
+.env.*.local
+
+# 依赖与构建产物
+node_modules/
+web/node_modules/
+web/dist/
+.DS_Store
+*.log

@@ -1,0 +1,11 @@
+{
+  "name": "github-web-pan",
+  "private": true,
+  "description": "基于 GitHub 与 Cloudflare Pages 的个人网盘",
+  "scripts": {
+    "sync-env": "node scripts/sync-web-env.mjs",
+    "build": "npm run sync-env && cd web && npm ci && npm run build",
+    "dev:web": "cd web && npm run dev",
+    "preview:web": "cd web && npm run preview"
+  }
+}
