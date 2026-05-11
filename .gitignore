@@ -1,5 +1,6 @@
 # 本地配置（含密钥，切勿提交）
-config.js
+# 仅忽略仓库根目录的 config.js；勿写成 config.js，否则会误忽略 web/src/config.js
+/config.js
 .dev.vars
 .env
 .env.local
