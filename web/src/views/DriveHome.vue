@@ -29,7 +29,7 @@
         show-icon
         :closable="false"
         title="服务端未完成配置"
-        description="请编辑仓库根目录 wrangler.toml 的 [vars]（GITHUB_OWNER / GITHUB_REPO / GITHUB_BRANCH），并在 Cloudflare Pages「机密」中设置 GITHUB_TOKEN；本地可复制 .dev.vars.example 为 .dev.vars。"
+        :description="configAlertDescription"
       />
       <el-alert v-else-if="status.truncated" type="warning" show-icon :closable="false" title="文件数量较多" description="GitHub 返回的目录树可能被截断，建议拆分仓库或精简 drive 目录。" />
     </el-header>
@@ -104,6 +104,8 @@ const status = reactive({
   needPassword: false,
   branch: publicConfig.branch,
   truncated: false,
+  /** @type {{ GITHUB_OWNER?: boolean, GITHUB_REPO?: boolean, GITHUB_TOKEN?: boolean }} */
+  varsPresent: {},
 });
 
 const files = ref([]);
@@ -123,6 +125,18 @@ const displayRepo = computed(() => {
   return '（构建时未注入仓库名，请检查 config.js 与同步脚本）';
 });
 
+/** 根据 /api/status 的 varsPresent 生成排查说明（不暴露密钥） */
+const configAlertDescription = computed(() => {
+  const v = status.varsPresent || {};
+  const o = v.GITHUB_OWNER === true ? '已检测到' : '未检测到';
+  const r = v.GITHUB_REPO === true ? '已检测到' : '未检测到';
+  const t = v.GITHUB_TOKEN === true ? '已检测到' : '未检测到';
+  return [
+    `服务端自检（仅是否传入，不含值）：GITHUB_OWNER ${o}；GITHUB_REPO ${r}；GITHUB_TOKEN ${t}。`,
+    '处理建议：① 仓库根 wrangler.toml 中同时维护 [vars] 与 [env.production.vars] 内的 OWNER/REPO/BRANCH，并 push；② 在 Pages → 变量和机密 → 为「生产环境」添加机密 GITHUB_TOKEN（名称须完全一致）；③ 添加或修改机密后务必 Retry deployment；④ 仍失败可用本机执行：npx wrangler pages secret put GITHUB_TOKEN --project-name=你的Pages项目名。',
+  ].join('');
+});
+
 onMounted(async () => {
   await bootstrap();
 });
@@ -133,6 +147,9 @@ async function bootstrap() {
     status.configured = Boolean(data.configured);
     status.needPassword = Boolean(data.needPassword);
     status.branch = data.branch || status.branch;
+    if (data.varsPresent && typeof data.varsPresent === 'object') {
+      status.varsPresent = { ...data.varsPresent };
+    }
 
     if (!status.configured) {
       return;

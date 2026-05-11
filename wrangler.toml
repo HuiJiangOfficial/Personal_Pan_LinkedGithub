@@ -1,11 +1,22 @@
 # 基于 `wrangler pages download config` 结果整理：请勿把 GITHUB_TOKEN 写入本文件。
 # 机密请在 Cloudflare Pages → 变量和机密 → 「机密」添加，或：npx wrangler pages secret put GITHUB_TOKEN --project-name=personal-pan-linkedgithub
+# 添加/修改机密后务必在 Deployments 里 Retry deployment，否则 Functions 可能仍读不到。
 #
 name = "personal-pan-linkedgithub"
 pages_build_output_dir = "web/dist"
 compatibility_date = "2024-10-22"
 
+# 顶层 [vars]：部分构建会注入
 [vars]
+GITHUB_OWNER = "HuiJiangOfficial"
+GITHUB_REPO = "Personal_Pan_LinkedGithub"
+GITHUB_BRANCH = "main"
+
+# 生产环境（与 wrangler download 结构一致）：部分 Pages 生产部署只合并本段，建议与 [vars] 同步填写
+[env.production]
+compatibility_date = "2024-10-22"
+
+[env.production.vars]
 GITHUB_OWNER = "HuiJiangOfficial"
 GITHUB_REPO = "Personal_Pan_LinkedGithub"
 GITHUB_BRANCH = "main"
