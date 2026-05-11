@@ -233,7 +233,8 @@
       <span class="site-footer__mark">GithubWebPan</span>
     </el-footer>
 
-    <el-backtop :right="isMobile ? 16 : 24" :bottom="isMobile ? 88 : 40" />
+    <TransferDock />
+    <el-backtop :right="isMobile ? 16 : 24" :bottom="backtopBottom" />
   </el-container>
 </template>
 
@@ -259,6 +260,8 @@ import {
 } from '@element-plus/icons-vue';
 import { http, getStoredPassword, setStoredPassword } from '@/api/http.js';
 import { publicConfig } from '@/config.js';
+import { createTransferTask, transferState } from '@/composables/transferTasks.js';
+import TransferDock from '@/components/TransferDock.vue';
 
 const DARK_KEY = 'github_web_pan_dark';
 
@@ -298,6 +301,13 @@ let mql;
 const previewScrollHeight = computed(() => {
   if (typeof window === 'undefined') return '70vh';
   return isMobile.value ? 'calc(100dvh - 200px)' : 'calc(100vh - 200px)';
+});
+
+/** 为底部传输条留出空间，避免与「回到顶部」重叠 */
+const backtopBottom = computed(() => {
+  const dock = transferState.tasks.length > 0;
+  if (isMobile.value) return dock ? 220 : 88;
+  return dock ? 100 : 56;
 });
 
 const displayRepo = computed(() => {
@@ -576,20 +586,33 @@ async function openPreview(row) {
 }
 
 async function downloadFile(row) {
+  const ctrl = createTransferTask({ type: 'download', name: row.name || row.path });
   try {
     const res = await http.get('/api/raw', {
       params: { path: row.path, download: 1 },
       responseType: 'blob',
+      onDownloadProgress(ev) {
+        const total = ev.total != null && ev.total > 0 ? ev.total : null;
+        ctrl.updateProgress(ev.loaded, total);
+      },
     });
-    const url = URL.createObjectURL(res.data);
+    const blob = res.data;
+    if (blob && typeof blob.size === 'number' && blob.size > 0) {
+      ctrl.updateProgress(blob.size, blob.size);
+    }
+    ctrl.success();
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = row.name || 'download';
     a.rel = 'noopener';
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1500);
-  } catch {
-    ElMessage.error('下载失败');
+    ElMessage.success(`已保存：${row.name || 'download'}`);
+  } catch (e) {
+    const msg = e?.response?.data?.error || e?.message || '下载失败';
+    ctrl.fail(msg);
+    ElMessage.error(typeof msg === 'string' ? msg : '下载失败');
   }
 }
 
@@ -647,14 +670,22 @@ async function handleUpload(option) {
   if (sub) {
     fd.append('path', sub);
   }
+  const ctrl = createTransferTask({ type: 'upload', name: file.name || '未命名' });
   try {
     await http.post('/api/upload', fd, {
       timeout: 300000,
+      onUploadProgress(ev) {
+        const total = ev.total != null && ev.total > 0 ? ev.total : null;
+        ctrl.updateProgress(ev.loaded, total);
+      },
     });
+    ctrl.success();
     ElMessage.success(`上传成功：${file.name}`);
     onSuccess?.();
     await loadFiles();
   } catch (e) {
+    const msg = e?.response?.data?.error || e?.message || '上传失败';
+    ctrl.fail(typeof msg === 'string' ? msg : '上传失败');
     onError?.(e);
   }
 }
