@@ -1,4 +1,5 @@
-# 复制为 .dev.vars 后填写，供 wrangler pages dev 注入到 env
+# 复制为 .dev.vars 后填写，供 wrangler pages dev 本地注入（勿提交）
+# 线上非机密以 wrangler.toml [vars] 为准；机密以控制台「机密」或 wrangler pages secret 为准
 GITHUB_OWNER=你的GitHub用户名
 GITHUB_REPO=仓库名
 GITHUB_BRANCH=main

@@ -15,7 +15,10 @@ export function readEnv(env) {
 export function assertEnv(cfg) {
   if (!cfg.owner || !cfg.repo || !cfg.token) {
     return jsonResponse(
-      { error: '服务端未配置 GITHUB_OWNER / GITHUB_REPO / GITHUB_TOKEN，请在 Cloudflare 环境变量或 config.js（本地）中设置。' },
+      {
+        error:
+          '服务端未配置 GITHUB_OWNER / GITHUB_REPO / GITHUB_TOKEN。请检查 wrangler.toml 的 [vars] 是否已填写仓库信息，并在控制台「机密」或 wrangler pages secret 中设置 GITHUB_TOKEN；本地可用 .dev.vars。',
+      },
       500
     );
   }

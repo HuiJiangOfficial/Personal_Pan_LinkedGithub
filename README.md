@@ -21,7 +21,7 @@
 │   └── sync-web-env.mjs   # 构建前将根目录 config 同步为 web/.env.production
 ├── config.example.js   # 配置模板（复制为 config.js）
 ├── package.json        # 根构建脚本：同步环境变量并构建 web
-├── wrangler.toml       # 本地 wrangler pages dev 参考
+├── wrangler.toml       # Pages 配置与非机密环境变量 [vars]（机密仅控制台 / secret）
 └── README.md
 ```
 
@@ -33,7 +33,18 @@
 
 ## 二、配置说明（核心）
 
-### 1. 根目录 `config.js`（推荐，本地与一次性生成前端环境）
+### 0. 使用 `wrangler.toml` 管理环境变量（与控制台提示一致）
+
+若你的 Cloudflare 提示：**「环境变量由 wrangler.toml 管理，仅机密可在仪表板配置」**，请按下面分工：
+
+| 类型 | 配置位置 |
+|------|----------|
+| **非机密**（`GITHUB_OWNER`、`GITHUB_REPO`、`GITHUB_BRANCH`） | 仓库根目录 **`wrangler.toml`** 的 **`[vars]`** 段，改好后 `git push` 触发重新部署。 |
+| **机密**（`GITHUB_TOKEN`、可选 `SITE_PASSWORD`） | **不要**写入 `wrangler.toml`。在 Cloudflare → **Pages 项目** → **变量和机密** → 添加 **机密（Secret）**；或使用命令行（需已 `wrangler login`）：`npx wrangler pages secret put GITHUB_TOKEN --project-name=<你的Pages项目名>`。 |
+
+Functions 运行时读取的是 **合并后的 `env`**：`[vars]` + 机密。缺任一必填项时，网页会提示「服务端未完成配置」。
+
+### 1. 根目录 `config.js`（可选：本地与构建时注入前端展示用 `VITE_*`）
 
 ```bash
 copy config.example.js config.js   # Windows
@@ -50,8 +61,8 @@ copy config.example.js config.js   # Windows
 | `GITHUB_TOKEN` | 仅用于本地或 CI；**不要提交到 Git** |
 | `SITE_PASSWORD` | 访问站点时的简单密码；可为空表示不启用 |
 
-> **重要**：Cloudflare Pages 上的 **Functions 运行时无法读取你仓库里的 `config.js` 中的密钥**。部署到线上时，必须在 **Cloudflare 控制台 → 你的 Pages 项目 → 设置 → 环境变量** 中，为 **生产环境**（以及预览环境如需）添加同名变量：`GITHUB_OWNER`、`GITHUB_REPO`、`GITHUB_BRANCH`（可选）、`GITHUB_TOKEN`、`SITE_PASSWORD`（可选）。  
-> 构建前端时，`npm run build` 会通过 `scripts/sync-web-env.mjs` 读取根目录 `config.js`（或 Pages 构建环境变量）生成 `web/.env.production`，仅写入 **`VITE_GITHUB_*`** 等非敏感字段，用于在界面展示仓库信息。
+> **重要**：**`GITHUB_TOKEN` 不要提交到 Git**（勿写入 `wrangler.toml` / `config.js`）。线上仅通过 **机密** 注入。  
+> 若服务端配置已用 **`wrangler.toml` + 机密** 完成，根目录 **`config.js` 仍可省略**；此时构建阶段可在 Cloudflare **Build** 环境变量中设置 `VITE_GITHUB_OWNER`、`VITE_GITHUB_REPO`、`VITE_GITHUB_BRANCH`（与 `[vars]` 一致），以便页眉显示仓库名；或保留不含 Token 的 `config.js` 供 `sync-web-env.mjs` 生成 `web/.env.production`。
 
 ### 2. 本地联调（可选）
 
@@ -78,9 +89,9 @@ npx wrangler pages dev web -- npm run dev
 | **Root directory** | `/`（仓库根） |
 | **Build command** | `npm run build` |
 | **Build output directory** | `web/dist` |
-| **Environment variables（Production）** | `GITHUB_OWNER`、`GITHUB_REPO`、`GITHUB_BRANCH`（可选）、`GITHUB_TOKEN`、`SITE_PASSWORD`（可选） |
+| **Environment variables** | 若账号要求 **仅用 wrangler.toml 管普通变量**：在 **`wrangler.toml` 的 `[vars]`** 填写 `GITHUB_OWNER`、`GITHUB_REPO`、`GITHUB_BRANCH`；在控制台 **仅添加机密** `GITHUB_TOKEN`（及可选 `SITE_PASSWORD`）。若控制台仍允许 **Build** 变量，可额外设置 `VITE_GITHUB_*` 供页眉展示。 |
 
-4. 首次部署完成后访问 Pages 分配的 `*.pages.dev` 域名即可。
+4. 首次部署完成后访问 Pages 分配的 **`*.pages.dev`** 域名即可（不要用 `*.workers.dev`）。
 
 > **构建环境变量**：若你不想在构建机读取仓库内 `config.js`，也可在 Cloudflare **Build** 环境变量里设置 `VITE_GITHUB_OWNER`、`VITE_GITHUB_REPO`、`VITE_GITHUB_BRANCH`，`sync-web-env.mjs` 会优先采用这些值写入 `web/.env.production`。
 

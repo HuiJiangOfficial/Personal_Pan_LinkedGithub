@@ -1,7 +1,20 @@
-# 本地开发可参考：https://developers.cloudflare.com/pages/functions/local-development/
-# 使用：在项目根目录执行 npx wrangler pages dev web -- npm run dev
-# 敏感变量请写入 .dev.vars（勿提交），格式见 .dev.vars.example
-
+# Cloudflare Pages + Functions 配置
+# 文档：https://developers.cloudflare.com/pages/functions/wrangler-configuration/
+#
+# 【非机密】写在下方 [vars]，提交到 Git 后随部署生效（改完需 push 重新部署）。
+# 【机密】GITHUB_TOKEN、SITE_PASSWORD 不要写进本文件；仅允许：
+#   - Cloudflare 控制台 → Pages 项目 → 变量和机密 → 「机密」中添加，或
+#   - 本机执行（需已登录 wrangler）：
+#       npx wrangler pages secret put GITHUB_TOKEN --project-name=<Pages项目名>
+#       npx wrangler pages secret put SITE_PASSWORD --project-name=<Pages项目名>
+#
+# name 建议与 Cloudflare 上该 Pages 项目的名称一致（便于 wrangler 对齐）。
 name = "github-web-pan"
 compatibility_date = "2024-10-22"
 pages_build_output_dir = "web/dist"
+
+[vars]
+# 改成你的 GitHub 用户名/组织与仓库名（双引号内替换后提交）
+GITHUB_OWNER = "YOUR_GITHUB_USERNAME"
+GITHUB_REPO = "YOUR_REPO_NAME"
+GITHUB_BRANCH = "main"

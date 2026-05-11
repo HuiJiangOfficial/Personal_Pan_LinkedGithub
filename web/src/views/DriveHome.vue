@@ -23,7 +23,14 @@
         </div>
       </div>
 
-      <el-alert v-if="!status.configured" type="error" show-icon :closable="false" title="服务端未完成配置" description="请在 Cloudflare Pages 环境变量中设置 GITHUB_OWNER、GITHUB_REPO、GITHUB_TOKEN，或使用 wrangler 本地 .dev.vars。" />
+      <el-alert
+        v-if="!status.configured"
+        type="error"
+        show-icon
+        :closable="false"
+        title="服务端未完成配置"
+        description="请编辑仓库根目录 wrangler.toml 的 [vars]（GITHUB_OWNER / GITHUB_REPO / GITHUB_BRANCH），并在 Cloudflare Pages「机密」中设置 GITHUB_TOKEN；本地可复制 .dev.vars.example 为 .dev.vars。"
+      />
       <el-alert v-else-if="status.truncated" type="warning" show-icon :closable="false" title="文件数量较多" description="GitHub 返回的目录树可能被截断，建议拆分仓库或精简 drive 目录。" />
     </el-header>
 
@@ -73,6 +80,10 @@
       </div>
       <el-empty v-else description="该文件类型暂不支持在线预览，请下载后查看" />
     </el-drawer>
+
+    <el-footer class="site-footer" height="auto">
+      <span class="site-footer__mark">GithubWebPan</span>
+    </el-footer>
   </el-container>
 </template>
 
@@ -414,5 +425,15 @@ async function handleUpload(option) {
   .title {
     font-size: 18px;
   }
+}
+
+.site-footer {
+  padding: 8px 16px 16px;
+  text-align: center;
+}
+
+.site-footer__mark {
+  font-size: 12px;
+  color: #909399;
 }
 </style>

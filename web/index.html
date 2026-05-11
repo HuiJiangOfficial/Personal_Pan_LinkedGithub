@@ -3,9 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <!-- 部署自检：在浏览器「查看网页源代码」中搜索 github-web-pan；若搜不到而只有 Hello World，说明当前 URL 未命中本 Pages 静态资源（多为 Worker/路由抢答） -->
+    <meta name="github-web-pan" content="vue3-vite" />
     <title>GitHub 个人网盘</title>
   </head>
   <body>
+    <noscript>请启用 JavaScript。应用标识：GithubWebPan</noscript>
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
   </body>
