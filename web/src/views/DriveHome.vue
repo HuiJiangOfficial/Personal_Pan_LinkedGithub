@@ -69,6 +69,21 @@
             <el-option label="大小 小→大" value="size-asc" />
             <el-option label="大小 大→小" value="size-desc" />
           </el-select>
+          <el-dropdown v-if="isMobile && canMutateDrive" trigger="click" @command="onMobileLocationCommand">
+            <el-button plain type="primary" size="small">
+              位置与新建
+              <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="newDir">新建目录…</el-dropdown-item>
+                <el-dropdown-item command="newFile">新建文件…</el-dropdown-item>
+                <el-dropdown-item divided command="propsCurDir">当前位置属性</el-dropdown-item>
+                <el-dropdown-item command="propsParentDir" :disabled="!uploadSubfolder.trim()">父级目录属性</el-dropdown-item>
+                <el-dropdown-item command="clearSubdir" :disabled="!uploadSubfolder.trim()" divided>清空上传子目录</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
         <div class="toolbar__row toolbar__row--secondary">
           <el-input
@@ -279,6 +294,61 @@
         <el-button type="primary" @click="propsOpen = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="newDirOpen" title="新建目录" width="min(420px, 92vw)" destroy-on-close class="props-dialog" @closed="newDirName = ''">
+      <p class="dialog-hint">将在<strong>当前上传子目录</strong>下创建占位文件 <code>.gitkeep</code>（Git 无空目录概念）。名称不能含 <code>/</code>、<code>..</code>。</p>
+      <el-input v-model="newDirName" maxlength="128" show-word-limit placeholder="目录名，如 notes、images" clearable @keyup.enter="submitNewDir" />
+      <template #footer>
+        <el-button @click="newDirOpen = false">取消</el-button>
+        <el-button type="primary" :loading="newDirBusy" :disabled="!canMutateDrive" @click="submitNewDir">创建</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="newFileOpen" title="新建文件" width="min(480px, 94vw)" destroy-on-close class="props-dialog" @closed="resetNewFileForm">
+      <p class="dialog-hint">在<strong>当前上传子目录</strong>下创建 UTF-8 文本文件；重名将自动加后缀。</p>
+      <el-form label-position="top" class="new-file-form">
+        <el-form-item label="类型">
+          <el-select v-model="newFileKind" class="w100" @change="onNewFileKindChange">
+            <el-option v-for="opt in newFileKindOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="文件名（不含路径，可改扩展名）">
+          <el-input v-model="newFileName" maxlength="160" show-word-limit placeholder="如 笔记.txt" clearable @keyup.enter="submitNewFile" />
+        </el-form-item>
+        <el-form-item label="初始内容（可改）">
+          <el-input v-model="newFileBody" type="textarea" :rows="10" class="new-file-ta" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="newFileOpen = false">取消</el-button>
+        <el-button type="primary" :loading="newFileBusy" :disabled="!canMutateDrive" @click="submitNewFile">创建</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="folderPropsOpen" :title="folderProps.title" width="min(440px, 92vw)" destroy-on-close class="props-dialog">
+      <p class="dialog-hint folder-props-note">{{ folderProps.note }}</p>
+      <dl class="props-dl">
+        <div class="props-row">
+          <dt>路径</dt>
+          <dd class="props-mono">{{ folderProps.pathLabel }}</dd>
+        </div>
+        <div class="props-row">
+          <dt>直接子文件</dt>
+          <dd>{{ folderProps.directFiles }} 个</dd>
+        </div>
+        <div class="props-row">
+          <dt>子树内文件</dt>
+          <dd>{{ folderProps.subtreeFiles }} 个</dd>
+        </div>
+        <div class="props-row">
+          <dt>子树合计大小</dt>
+          <dd>{{ formatSize(folderProps.subtreeBytes) }}</dd>
+        </div>
+      </dl>
+      <template #footer>
+        <el-button type="primary" @click="folderPropsOpen = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </el-container>
 </template>
 
@@ -309,6 +379,10 @@ import {
   InfoFilled,
   Delete,
   RefreshRight,
+  FolderAdd,
+  EditPen,
+  ArrowUp,
+  Close,
 } from '@element-plus/icons-vue';
 import { http } from '@/api/http.js';
 import { publicConfig } from '@/config.js';
@@ -344,6 +418,26 @@ const ctxRow = ref(null);
 const propsOpen = ref(false);
 /** @type {import('vue').Ref<null | { path: string, name: string, size?: number|null, sha?: string|null }>} */
 const propsRow = ref(null);
+
+const newDirOpen = ref(false);
+const newDirName = ref('');
+const newDirBusy = ref(false);
+
+const newFileOpen = ref(false);
+const newFileKind = ref('txt');
+const newFileName = ref('未命名.txt');
+const newFileBody = ref('');
+const newFileBusy = ref(false);
+
+const folderPropsOpen = ref(false);
+const folderProps = reactive({
+  title: '',
+  pathLabel: '',
+  note: '',
+  directFiles: 0,
+  subtreeFiles: 0,
+  subtreeBytes: 0,
+});
 
 const status = reactive({
   configured: true,
@@ -689,6 +783,256 @@ function parentDir(relPath) {
   return i < 0 ? '' : s.slice(0, i);
 }
 
+const NEW_FILE_KINDS = {
+  txt: { label: '纯文本 (.txt)', ext: 'txt', mime: 'text/plain;charset=utf-8', tpl: '' },
+  md: { label: 'Markdown (.md)', ext: 'md', mime: 'text/markdown;charset=utf-8', tpl: '# 新文档\n\n' },
+  json: { label: 'JSON (.json)', ext: 'json', mime: 'application/json;charset=utf-8', tpl: '{\n  \n}\n' },
+  html: {
+    label: 'HTML (.html)',
+    ext: 'html',
+    mime: 'text/html;charset=utf-8',
+    tpl: '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n  <meta charset="utf-8" />\n  <title>新建</title>\n</head>\n<body>\n\n</body>\n</html>\n',
+  },
+  css: { label: 'CSS (.css)', ext: 'css', mime: 'text/css;charset=utf-8', tpl: '/* 样式 */\n' },
+  js: { label: 'JavaScript (.js)', ext: 'js', mime: 'text/javascript;charset=utf-8', tpl: '//\n' },
+  yml: { label: 'YAML (.yml)', ext: 'yml', mime: 'text/yaml;charset=utf-8', tpl: '#\n' },
+  log: { label: '日志 (.log)', ext: 'log', mime: 'text/plain;charset=utf-8', tpl: '' },
+};
+
+const newFileKindOptions = Object.entries(NEW_FILE_KINDS).map(([value, v]) => ({ value, label: v.label }));
+
+function isBlockedRelPath(rel) {
+  const p = String(rel || '').replace(/^\/+/, '').trim();
+  return p === '.webpan' || p.startsWith('.webpan/') || p.includes('/.webpan/');
+}
+
+function sanitizeFolderName(raw) {
+  const s = String(raw || '').trim();
+  if (!s || s.includes('..') || /[\\/]/.test(s)) return '';
+  if (/[\x00-\x1f]/.test(s)) return '';
+  if (s.length > 128) return '';
+  const low = s.toLowerCase();
+  if (low === '.webpan' || low.startsWith('.webpan')) return '';
+  return s;
+}
+
+/** 仅文件名段，可含扩展名 */
+function sanitizeFileNameInput(raw) {
+  let s = String(raw || '').trim().replace(/\\/g, '/');
+  const seg = s.split('/').filter(Boolean);
+  s = seg.length ? seg[seg.length - 1] : '';
+  if (!s || s.includes('..') || s.includes('/') || /[\x00-\x1f]/.test(s)) return '';
+  if (s.length > 160) return '';
+  const low = s.toLowerCase();
+  if (low === '.webpan' || low.startsWith('.webpan')) return '';
+  return s;
+}
+
+function filesUnderPrefix(prefix) {
+  const p = String(prefix || '').trim();
+  if (!p) return files.value;
+  return files.value.filter((f) => f.path === p || f.path.startsWith(`${p}/`));
+}
+
+function directFilesUnderPrefix(prefix) {
+  const p = String(prefix || '').trim();
+  return files.value.filter((f) => parentDir(f.path) === p);
+}
+
+function computeFolderStats(prefix) {
+  const list = filesUnderPrefix(prefix);
+  const bytes = list.reduce((s, f) => s + (Number(f.size) || 0), 0);
+  return {
+    subtreeFiles: list.length,
+    subtreeBytes: bytes,
+    directFiles: directFilesUnderPrefix(prefix).length,
+  };
+}
+
+function resetNewFileForm() {
+  newFileKind.value = 'txt';
+  newFileName.value = '未命名.txt';
+  newFileBody.value = NEW_FILE_KINDS.txt.tpl;
+}
+
+function onNewFileKindChange(nextKind) {
+  const k = NEW_FILE_KINDS[nextKind];
+  if (!k) return;
+  let name = newFileName.value.trim();
+  if (!name) {
+    newFileName.value = `未命名.${k.ext}`;
+  } else {
+    const i = name.lastIndexOf('.');
+    const stem = i > 0 ? name.slice(0, i) : name;
+    newFileName.value = `${stem}.${k.ext}`;
+  }
+  newFileBody.value = k.tpl;
+}
+
+function fillFolderProps(prefix, title) {
+  const st = computeFolderStats(prefix);
+  folderProps.title = title;
+  folderProps.pathLabel = prefix || '(根目录)';
+  folderProps.directFiles = st.directFiles;
+  folderProps.subtreeFiles = st.subtreeFiles;
+  folderProps.subtreeBytes = st.subtreeBytes;
+  folderProps.note =
+    '统计基于 Git 树中的文件列表：空目录若无占位文件则不会出现在树中；若树被截断，数字可能不完整。';
+}
+
+function openFolderPropsDialog(which) {
+  const cur = uploadSubfolder.value.trim();
+  const prefix = which === 'parent' ? parentDir(cur) : cur;
+  if (which === 'parent' && !cur) return;
+  fillFolderProps(prefix, which === 'parent' ? '父级目录属性' : '当前位置属性');
+  folderPropsOpen.value = true;
+}
+
+function openFolderPropsForPath(prefix) {
+  fillFolderProps(prefix, '目录属性');
+  folderPropsOpen.value = true;
+}
+
+function onMobileLocationCommand(cmd) {
+  if (cmd === 'newDir') {
+    newDirName.value = '';
+    newDirOpen.value = true;
+  } else if (cmd === 'newFile') {
+    resetNewFileForm();
+    newFileOpen.value = true;
+  } else if (cmd === 'propsCurDir') openFolderPropsDialog('current');
+  else if (cmd === 'propsParentDir') openFolderPropsDialog('parent');
+  else if (cmd === 'clearSubdir') {
+    uploadSubfolder.value = '';
+    ElMessage.success('已清空上传子目录');
+  }
+}
+
+async function uploadTextToDrive(fullRelPath, textContent, mime) {
+  const norm = String(fullRelPath || '').replace(/\\/g, '/').replace(/^\/+/, '');
+  if (!norm || isBlockedRelPath(norm)) throw new Error('非法或受保护路径');
+  const parts = norm.split('/').filter(Boolean);
+  const fileName = parts.pop();
+  if (!fileName) throw new Error('缺少文件名');
+  const dir = parts.join('/');
+  const blob = new Blob([textContent], { type: mime || 'text/plain;charset=utf-8' });
+  const file = new File([blob], fileName, { type: blob.type });
+  const fd = new FormData();
+  fd.append('file', file);
+  if (dir) fd.append('path', `${dir}/`);
+  const ctrl = createTransferTask({ type: 'upload', name: fileName });
+  try {
+    await http.post('/api/upload', fd, {
+      timeout: 300000,
+      onUploadProgress(ev) {
+        const total = ev.total != null && ev.total > 0 ? ev.total : null;
+        ctrl.updateProgress(ev.loaded, total);
+      },
+    });
+    if (blob.size > 0) ctrl.updateProgress(blob.size, blob.size);
+    ctrl.success();
+  } catch (e) {
+    const msg = e?.response?.data?.error || e?.message || '上传失败';
+    ctrl.fail(typeof msg === 'string' ? msg : '上传失败');
+    throw e;
+  }
+}
+
+/** 若路径已存在则加 (2) 后缀 */
+function uniqueFileRelPath(targetDir, fileName) {
+  const reserved = new Set(files.value.map((f) => f.path));
+  const join = (dir, name) => (dir ? `${dir}/${name}` : name);
+  let stem = fileName;
+  let ext = '';
+  const dot = fileName.lastIndexOf('.');
+  if (dot > 0 && dot < fileName.length - 1) {
+    stem = fileName.slice(0, dot);
+    ext = fileName.slice(dot);
+  }
+  let n = 0;
+  for (;;) {
+    const name = n === 0 ? fileName : `${stem} (${n})${ext}`;
+    const rel = join(targetDir, name);
+    if (!reserved.has(rel)) return rel;
+    n += 1;
+    if (n > 500) throw new Error('无法生成不冲突的文件名');
+  }
+}
+
+async function submitNewDir() {
+  if (!canMutateDrive.value) return;
+  const name = sanitizeFolderName(newDirName.value);
+  if (!name) {
+    ElMessage.warning('请输入有效的目录名（不能含 /、\\、.. 等）');
+    return;
+  }
+  const base = uploadSubfolder.value.trim();
+  const rel = base ? `${base}/${name}/.gitkeep` : `${name}/.gitkeep`;
+  if (isBlockedRelPath(rel)) {
+    ElMessage.error('不能在该路径下创建');
+    return;
+  }
+  if (files.value.some((f) => f.path === rel)) {
+    ElMessage.error('该占位文件已存在，请换名或删除后重试');
+    return;
+  }
+  const prefix = base ? `${base}/${name}` : name;
+  if (files.value.some((f) => f.path !== rel && (f.path === prefix || f.path.startsWith(`${prefix}/`)))) {
+    ElMessage.warning('该目录下已有其它文件，仍可使用；若仅需占位请确认名称不冲突');
+  }
+  newDirBusy.value = true;
+  try {
+    const content = '# WebPan 目录占位（可删除；目录内仍有其它文件时删除不影响目录）\n';
+    await uploadTextToDrive(rel, content, 'text/plain;charset=utf-8');
+    ElMessage.success(`已创建目录占位：${prefix}`);
+    newDirOpen.value = false;
+    newDirName.value = '';
+    await loadFiles();
+  } catch {
+    /* 已提示 */
+  } finally {
+    newDirBusy.value = false;
+  }
+}
+
+async function submitNewFile() {
+  if (!canMutateDrive.value) return;
+  const kind = NEW_FILE_KINDS[newFileKind.value];
+  if (!kind) return;
+  let fname = sanitizeFileNameInput(newFileName.value);
+  if (!fname) {
+    ElMessage.warning('请输入有效文件名');
+    return;
+  }
+  if (!fname.includes('.')) fname = `${fname}.${kind.ext}`;
+  else {
+    const ext = fname.slice(fname.lastIndexOf('.') + 1).toLowerCase();
+    if (ext !== kind.ext) {
+      const stem = fname.slice(0, fname.lastIndexOf('.'));
+      fname = `${stem}.${kind.ext}`;
+      ElMessage.info(`已按所选类型将扩展名设为 .${kind.ext}`);
+    }
+  }
+  const base = uploadSubfolder.value.trim();
+  const rel = uniqueFileRelPath(base, fname);
+  if (isBlockedRelPath(rel)) {
+    ElMessage.error('不能在该路径下创建');
+    return;
+  }
+  newFileBusy.value = true;
+  try {
+    await uploadTextToDrive(rel, newFileBody.value, kind.mime);
+    ElMessage.success(`已创建：${rel}`);
+    newFileOpen.value = false;
+    resetNewFileForm();
+    await loadFiles();
+  } catch {
+    /* */
+  } finally {
+    newFileBusy.value = false;
+  }
+}
+
 function fileTypeLabel(row) {
   const c = fileCategory(row);
   const map = { image: '图片', pdf: 'PDF', text: '文本', video: '视频', audio: '音频', file: '文件' };
@@ -833,9 +1177,11 @@ function buildRowCtxItems(row) {
   const pdir = parentDir(row.path);
   const pLabel = pdir ? `粘贴到「${pdir}」` : '粘贴到根目录';
   return [
+    { type: 'label', label: '打开' },
     { key: 'preview', label: '预览', icon: View, show: canPrev },
     { key: 'download', label: '下载', icon: Download },
     { type: 'divider' },
+    { type: 'label', label: '剪贴板' },
     { key: 'copyI', label: '复制', icon: CopyDocument, shortcut: '内部' },
     { key: 'cutI', label: '剪切', icon: Switch, disabled: !canMutateDrive.value },
     {
@@ -851,12 +1197,16 @@ function buildRowCtxItems(row) {
       disabled: !canMutateDrive.value || !hasDriveClipboard.value,
     },
     { type: 'divider' },
+    { type: 'label', label: '路径与目录' },
     { key: 'copyPath', label: '复制路径', icon: DocumentCopy },
     { key: 'copyName', label: '复制文件名', icon: DocumentCopy },
     { key: 'setDir', label: '将上传子目录设为所在文件夹', icon: FolderOpened },
+    { key: 'propsDirRow', label: '所在目录属性', icon: ArrowUp },
     { type: 'divider' },
-    { key: 'props', label: '属性', icon: InfoFilled },
+    { type: 'label', label: '信息' },
+    { key: 'props', label: '文件属性', icon: InfoFilled },
     { type: 'divider' },
+    { type: 'label', label: '危险操作' },
     { key: 'delete', label: '删除', icon: Delete, danger: true, disabled: !canMutateDrive.value },
   ];
 }
@@ -864,22 +1214,57 @@ function buildRowCtxItems(row) {
 function buildBlankCtxItems() {
   const sub = uploadSubfolder.value.trim();
   const subLabel = sub ? `粘贴到「${sub}」` : '粘贴到当前子目录（根）';
-  return [
+  const canWrite = canMutateDrive.value;
+  const hasSub = Boolean(sub);
+  /** @type {any[]} */
+  const out = [
+    { type: 'label', label: '剪贴板' },
     {
       key: 'pasteT',
       label: subLabel,
       icon: DocumentAdd,
-      disabled: !canMutateDrive.value || !hasDriveClipboard.value,
+      disabled: !canWrite || !hasDriveClipboard.value,
     },
     {
       key: 'pasteR',
       label: '粘贴到网盘根目录',
       icon: FolderOpened,
-      disabled: !canMutateDrive.value || !hasDriveClipboard.value,
+      disabled: !canWrite || !hasDriveClipboard.value,
+    },
+  ];
+  if (canWrite) {
+    out.push(
+      { type: 'divider' },
+      { type: 'label', label: '新建' },
+      { key: 'newDir', label: '新建目录…', icon: FolderAdd },
+      { key: 'newFile', label: '新建文件…', icon: EditPen }
+    );
+  }
+  out.push(
+    { type: 'divider' },
+    { type: 'label', label: '位置' },
+    {
+      key: 'propsCurDir',
+      label: '当前位置属性',
+      icon: FolderOpened,
+    },
+    {
+      key: 'propsParentDir',
+      label: '父级目录属性',
+      icon: ArrowUp,
+      disabled: !hasSub,
+    },
+    {
+      key: 'clearSubdir',
+      label: '清空上传子目录',
+      icon: Close,
+      disabled: !hasSub,
     },
     { type: 'divider' },
-    { key: 'reload', label: '刷新', icon: RefreshRight },
-  ];
+    { type: 'label', label: '列表' },
+    { key: 'reload', label: '刷新', icon: RefreshRight }
+  );
+  return out;
 }
 
 function onRowContextMenu(row, _col, e) {
@@ -911,6 +1296,29 @@ function onCtxPick(key) {
     pasteIntoDirectory('');
     return;
   }
+  if (key === 'newDir') {
+    newDirName.value = '';
+    newDirOpen.value = true;
+    return;
+  }
+  if (key === 'newFile') {
+    resetNewFileForm();
+    newFileOpen.value = true;
+    return;
+  }
+  if (key === 'propsCurDir') {
+    openFolderPropsDialog('current');
+    return;
+  }
+  if (key === 'propsParentDir') {
+    openFolderPropsDialog('parent');
+    return;
+  }
+  if (key === 'clearSubdir') {
+    uploadSubfolder.value = '';
+    ElMessage.success('已清空上传子目录');
+    return;
+  }
   if (!row) return;
   if (key === 'preview') openPreview(row);
   else if (key === 'download') downloadFile(row);
@@ -922,7 +1330,8 @@ function onCtxPick(key) {
   else if (key === 'setDir') {
     uploadSubfolder.value = parentDir(row.path);
     ElMessage.success(uploadSubfolder.value ? `已设为：${uploadSubfolder.value}` : '已设为根目录');
-  } else if (key === 'props') openProps(row);
+  } else if (key === 'propsDirRow') openFolderPropsForPath(parentDir(row.path));
+  else if (key === 'props') openProps(row);
   else if (key === 'delete') removeFile(row);
 }
 function onMobileCardTap(row) {
@@ -1407,6 +1816,38 @@ html.dark .title {
 
 .props-break {
   word-break: break-all;
+}
+
+.dialog-hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.55;
+}
+
+.dialog-hint code {
+  font-size: 12px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--el-fill-color-light);
+}
+
+.folder-props-note {
+  margin-bottom: 12px;
+}
+
+.new-file-form {
+  margin-top: 4px;
+}
+
+.w100 {
+  width: 100%;
+}
+
+.new-file-ta :deep(textarea) {
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 @media (max-width: 767px) {

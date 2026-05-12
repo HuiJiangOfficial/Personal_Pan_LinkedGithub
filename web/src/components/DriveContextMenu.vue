@@ -8,8 +8,9 @@
         role="menu"
         @mousedown.stop
       >
-        <template v-for="(it, idx) in visibleItems" :key="it.key ? it.key + '-' + idx : 'div-' + idx">
+        <template v-for="(it, idx) in visibleItems" :key="it.key ? it.key + '-' + idx : (it.type === 'label' ? 'lb-' + idx : 'div-' + idx)">
           <div v-if="it.type === 'divider'" class="dcm-divider" />
+          <div v-else-if="it.type === 'label'" class="dcm-label">{{ it.label }}</div>
           <button
             v-else
             type="button"
@@ -36,7 +37,7 @@ const props = defineProps({
   modelValue: { type: Boolean, default: false },
   x: { type: Number, default: 0 },
   y: { type: Number, default: 0 },
-  /** @type {import('vue').PropType<{ key: string, type?: 'item'|'divider', label?: string, icon?: object, disabled?: boolean, danger?: boolean, shortcut?: string, show?: boolean }[]>} */
+  /** @type {import('vue').PropType<{ key?: string, type?: 'item'|'divider'|'label', label?: string, icon?: object, disabled?: boolean, danger?: boolean, shortcut?: string, show?: boolean }[]>} */
   items: { type: Array, default: () => [] },
 });
 
@@ -46,7 +47,10 @@ const panelRef = ref(null);
 const pos = ref({ left: 0, top: 0 });
 
 const visibleItems = computed(() =>
-  (props.items || []).filter((it) => it.type === 'divider' || it.show !== false)
+  (props.items || []).filter((it) => {
+    if (it.type === 'divider' || it.type === 'label') return true;
+    return it.show !== false;
+  })
 );
 
 function close() {
@@ -54,7 +58,7 @@ function close() {
 }
 
 function onPick(it) {
-  if (it.disabled || it.type === 'divider') return;
+  if (it.disabled || it.type === 'divider' || it.type === 'label') return;
   emit('pick', it.key);
   close();
 }
@@ -144,6 +148,15 @@ html.dark .dcm-panel {
   height: 1px;
   margin: 4px 6px;
   background: var(--el-border-color-lighter);
+}
+
+.dcm-label {
+  padding: 6px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--el-text-color-placeholder);
+  user-select: none;
 }
 
 .dcm-item {
