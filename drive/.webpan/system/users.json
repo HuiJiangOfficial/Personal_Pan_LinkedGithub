@@ -6,14 +6,6 @@
   "ignoreGitkeep": true,
   "users": [
     {
-      "username": "huihui",
-      "role": "user",
-      "salt": "086d2e59ff7a750fea048707a36a7579",
-      "hash": "5620aa4f3a3db7f16fa9823e3783ce70289f4c0d0ae3da5c0616427e66461790",
-      "iterations": 100000,
-      "createdAt": "2026-05-12T01:21:47.265Z"
-    },
-    {
       "username": "test",
       "role": "user",
       "salt": "0e6d0606a2e606b31baa7460d9baa40d",
