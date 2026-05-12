@@ -1,6 +1,13 @@
 # 复制为 .dev.vars 后填写（勿提交 .dev.vars）
 # 本地 wrangler pages dev 时 Functions 会读取这些变量
 
+
+
+
+#重要提示
+#如果你要上传到CloudFlare的Pages来部署，请不要输入下面的信息，保持默认就行，下面的信息你需要在CloudFlare的Pages页面配置中的“变量与机密”处填写
+
+
 GITHUB_TOKEN=
 
 # 会话签名（随机长字符串，与生产环境应不同）

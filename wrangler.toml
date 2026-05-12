@@ -12,8 +12,8 @@ compatibility_date = "2024-10-22"
 
 # 顶层 [vars]：部分构建会注入
 [vars]
-GITHUB_OWNER = "HuiJiangOfficial"
-GITHUB_REPO = "Personal_Pan_LinkedGithub"
+GITHUB_OWNER = "Your Github User Name"
+GITHUB_REPO = "Your GitHub repository name"
 GITHUB_BRANCH = "main"
 
 # 生产环境（与 wrangler download 结构一致）：部分 Pages 生产部署只合并本段，建议与 [vars] 同步填写
@@ -21,6 +21,6 @@ GITHUB_BRANCH = "main"
 compatibility_date = "2024-10-22"
 
 [env.production.vars]
-GITHUB_OWNER = "HuiJiangOfficial"
-GITHUB_REPO = "Personal_Pan_LinkedGithub"
+GITHUB_OWNER = "Your Github User Name"
+GITHUB_REPO = "Your GitHub repository name"
 GITHUB_BRANCH = "main"
