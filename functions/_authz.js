@@ -1,5 +1,5 @@
 /**
- * 授权：访客路径、系统隐藏路径
+ * 授权：访客路径、系统隐藏路径、用户网盘背景路径保护
  */
 import { jsonResponse } from './_utils.js';
 import { loadUserStore } from './_userStore.js';
@@ -45,6 +45,8 @@ export async function assertDriveRole(cfg, session) {
 export async function assertGuestPathAllowed(cfg, session, relPath) {
   if (session.role !== 'guest') return null;
   const p = String(relPath || '').replace(/^\/+/, '');
+  // 允许访客读取背景配置（如果需求允许访客看默认背景或自己的访客背景）
+  // 但通常背景是私有的，这里根据 api/drive-background.js 的逻辑，访客可以 GET 自己的背景
   if (p === '.webpan/background' || p.startsWith('.webpan/background/')) return null;
   const { data } = await loadUserStore(cfg);
   if (guestMayReadPath(data, relPath)) return null;
@@ -60,4 +62,31 @@ export function requireAdmin(session) {
   if (!session?.sub) return jsonResponse({ error: '请先登录' }, 401);
   if (session.role !== 'admin') return jsonResponse({ error: '需要管理员权限' }, 403);
   return null;
+}
+
+/**
+ * 以下函数用于保护用户网盘内的 .webpan 目录（除 background 外）
+ * 并控制列表显示
+ */
+
+function pathSegments(relPath) {
+  return String(relPath || '')
+    .replace(/^\/+/, '')
+    .split('/')
+    .filter(Boolean);
+}
+
+/** 禁止用户通过通用上传/读写访问的 .webpan 路径（除 .webpan/background 外） */
+export function isForbiddenUserWebpanPath(relPath) {
+  const parts = pathSegments(relPath);
+  const i = parts.findIndex((s) => s.toLowerCase() === '.webpan');
+  if (i === -1) return false;
+  const next = parts[i + 1];
+  if (next && next.toLowerCase() === 'background') return false;
+  return true;
+}
+
+/** 主文件列表中隐藏用户 .webpan 下内容（含背景素材） */
+export function isHiddenFromUserDriveList(relPath) {
+  return pathSegments(relPath).some((s) => s.toLowerCase() === '.webpan');
 }
