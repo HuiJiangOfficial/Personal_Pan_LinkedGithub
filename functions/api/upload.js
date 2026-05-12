@@ -13,7 +13,7 @@ import {
   CACHE_PRIVATE_NO_STORE,
 } from '../_utils.js';
 import { getSession } from '../_session.js';
-import { assertDriveRole, assertNotGuestWrite, isSystemDrivePath } from '../_authz.js';
+import { assertDriveRole, assertNotGuestWrite, isSystemDrivePath, isForbiddenUserWebpanPath } from '../_authz.js';
 import { sessionDriveSub, toGithubUserDrivePath } from '../_driveScope.js';
 
 const MAX_BYTES = 45 * 1024 * 1024;
@@ -83,6 +83,10 @@ export async function onRequestPost(context) {
 
   if (isSystemDrivePath(relative)) {
     return withCors(request, jsonResponse({ error: '禁止上传到系统目录' }, 403));
+  }
+
+  if (isForbiddenUserWebpanPath(relative)) {
+    return withCors(request, jsonResponse({ error: '禁止上传到该路径' }, 403));
   }
 
   let ghPath;

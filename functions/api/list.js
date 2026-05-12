@@ -12,7 +12,7 @@ import {
   CACHE_PRIVATE_NO_STORE,
 } from '../_utils.js';
 import { getSession } from '../_session.js';
-import { assertDriveRole, isSystemDrivePath, guestMayReadPath } from '../_authz.js';
+import { assertDriveRole, isSystemDrivePath, guestMayReadPath, isHiddenFromUserDriveList } from '../_authz.js';
 import { loadUserStore } from '../_userStore.js';
 import { sessionDriveSub } from '../_driveScope.js';
 
@@ -80,7 +80,8 @@ export async function onRequestGet(context) {
           type: 'file',
         };
       })
-      .filter((f) => !isSystemDrivePath(f.path));
+      .filter((f) => !isSystemDrivePath(f.path))
+      .filter((f) => !isHiddenFromUserDriveList(f.path));
 
     if (hideGitkeep) {
       files = files.filter((f) => f.name !== '.gitkeep');

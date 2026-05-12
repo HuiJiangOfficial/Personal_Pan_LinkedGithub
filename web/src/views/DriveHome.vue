@@ -1,60 +1,66 @@
 <template>
-  <el-container class="page" :class="{ 'page--mobile': isMobile }">
+  <el-container class="page" :class="{ 'page--mobile': isMobile, 'page--has-bg': bgState.hasImage }" :style="pageShellStyle">
+    <div class="page__bg" aria-hidden="true" />
+    <div class="page__bg-scrim" aria-hidden="true" />
     <el-header class="header" height="auto">
-      <div class="hero">
-        <div class="hero__text">
-          <div class="hero__badge">
-            <el-icon><FolderOpened /></el-icon>
-            <span>Drive</span>
+      <div class="header__shell glass-panel">
+        <div class="hero">
+          <div class="hero__text">
+            <div class="hero__badge">
+              <el-icon><FolderOpened /></el-icon>
+              <span>Drive</span>
+            </div>
+            <h1 class="title">GitHub 个人网盘</h1>
+            <p class="subtitle">
+              <span class="subtitle__repo">{{ displayRepo }}</span>
+              <el-divider direction="vertical" class="subtitle__div" />
+              <span>分支 {{ status.branch || publicConfig.branch }}</span>
+              <el-tag v-if="status.truncated" type="warning" size="small" effect="plain" class="subtitle__tag">树可能被截断</el-tag>
+              <el-tag v-if="me.role" type="info" size="small" effect="plain" class="subtitle__tag">{{ roleLabel }}</el-tag>
+            </p>
           </div>
-          <h1 class="title">GitHub 个人网盘</h1>
-          <p class="subtitle">
-            <span class="subtitle__repo">{{ displayRepo }}</span>
-            <el-divider direction="vertical" class="subtitle__div" />
-            <span>分支 {{ status.branch || publicConfig.branch }}</span>
-            <el-tag v-if="status.truncated" type="warning" size="small" effect="plain" class="subtitle__tag">树可能被截断</el-tag>
-            <el-tag v-if="me.role" type="info" size="small" effect="plain" class="subtitle__tag">{{ roleLabel }}</el-tag>
-          </p>
+          <div class="hero__actions">
+            <el-tooltip content="深色模式" placement="bottom">
+              <el-button :icon="isDark ? Sunny : Moon" circle @click="toggleDark" />
+            </el-tooltip>
+            <el-tooltip content="外观与背景（仅本人可见）" placement="bottom">
+              <el-button :icon="Brush" circle plain @click="openAppearance" />
+            </el-tooltip>
+            <el-button v-if="me.role === 'admin'" type="warning" plain @click="goAdmin">管理后台</el-button>
+            <el-button type="primary" :icon="Refresh" :loading="loading" @click="loadFiles">刷新</el-button>
+            <el-upload
+              :show-file-list="false"
+              :disabled="!canMutateDrive"
+              :http-request="handleUpload"
+              multiple
+              class="upload-inline"
+            >
+              <el-button type="success" :icon="UploadFilled">选择文件</el-button>
+            </el-upload>
+            <el-button link type="danger" @click="logout">退出登录</el-button>
+          </div>
         </div>
-        <div class="hero__actions">
-          <el-tooltip content="深色模式" placement="bottom">
-            <el-button :icon="isDark ? Sunny : Moon" circle @click="toggleDark" />
-          </el-tooltip>
-          <el-button v-if="me.role === 'admin'" type="warning" plain @click="goAdmin">管理后台</el-button>
-          <el-button type="primary" :icon="Refresh" :loading="loading" @click="loadFiles">刷新</el-button>
-          <el-upload
-            :show-file-list="false"
-            :disabled="!canMutateDrive"
-            :http-request="handleUpload"
-            multiple
-            class="upload-inline"
-          >
-            <el-button type="success" :icon="UploadFilled">选择文件</el-button>
-          </el-upload>
-          <el-button link type="danger" @click="logout">退出登录</el-button>
-        </div>
-      </div>
 
-      <el-alert
-        v-if="!status.configured"
-        type="error"
-        show-icon
-        :closable="false"
-        title="服务端未完成配置"
-        :description="configAlertDescription"
-        class="alert-block"
-      />
-      <el-alert
-        v-else-if="status.truncated"
-        type="warning"
-        show-icon
-        :closable="false"
-        title="文件数量较多"
-        description="GitHub 返回的目录树可能被截断，建议拆分仓库或精简 drive 目录。"
-        class="alert-block"
-      />
+        <el-alert
+          v-if="!status.configured"
+          type="error"
+          show-icon
+          :closable="false"
+          title="服务端未完成配置"
+          :description="configAlertDescription"
+          class="alert-block"
+        />
+        <el-alert
+          v-else-if="status.truncated"
+          type="warning"
+          show-icon
+          :closable="false"
+          title="文件数量较多"
+          description="GitHub 返回的目录树可能被截断，建议拆分仓库或精简 drive 目录。"
+          class="alert-block"
+        />
 
-      <div v-if="status.configured" class="toolbar" :class="{ 'toolbar--sticky': isMobile }">
+      <div v-if="status.configured" class="toolbar toolbar--below" :class="{ 'toolbar--sticky': isMobile }">
         <div class="toolbar__row">
           <el-input
             v-model="keyword"
@@ -112,10 +118,11 @@
           </div>
         </div>
       </div>
+      </div>
     </el-header>
 
     <el-main class="main">
-      <el-card v-if="status.configured" class="card" shadow="hover">
+      <el-card v-if="status.configured" class="card glass-card" shadow="hover">
         <!-- 桌面：表格 -->
         <div v-if="!isMobile" class="table-wrap table-wrap--ctx" @contextmenu="onTableSurfaceContextmenu">
           <el-table
@@ -349,6 +356,43 @@
         <el-button type="primary" @click="folderPropsOpen = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <el-drawer v-model="appearanceOpen" title="外观与背景" direction="rtl" size="min(420px, 92vw)" destroy-on-close class="appearance-drawer">
+      <p class="appearance-intro">
+        背景图与设置保存在<strong>您本人</strong>仓库目录下的 <code>.webpan/background/</code>，不会在文件列表中展示，其他用户无法访问。
+      </p>
+      <el-alert v-if="!canMutateDrive" type="info" show-icon :closable="false" title="当前为只读账号" class="mb-16" />
+      <div v-if="bgState.hasImage" class="appearance-preview-wrap">
+        <span class="appearance-label">当前预览</span>
+        <div class="appearance-preview" :style="appearancePreviewStyle" />
+      </div>
+      <el-form label-position="top" class="appearance-form">
+        <el-form-item label="上传背景图（JPG / PNG / GIF，最大 4MB）">
+          <el-upload
+            drag
+            :disabled="!canMutateDrive"
+            :show-file-list="false"
+            accept=".jpg,.jpeg,.png,.gif,image/jpeg,image/png,image/gif"
+            :http-request="uploadDriveBackground"
+          >
+            <el-icon class="appearance-upload-icon"><UploadFilled /></el-icon>
+            <div class="appearance-upload-text">拖拽或点击上传</div>
+          </el-upload>
+        </el-form-item>
+        <el-form-item label="界面蒙层浓度（越高背景越淡）">
+          <el-slider v-model="uiOverlay" :min="0.35" :max="0.9" :step="0.01" show-input :show-input-controls="false" />
+        </el-form-item>
+        <el-form-item label="背景模糊（像素）">
+          <el-slider v-model="uiBlur" :min="0" :max="24" :step="1" show-input />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" :loading="appearanceSaving" :disabled="!canMutateDrive" @click="saveAppearanceSettings">保存显示设置</el-button>
+          <el-button type="danger" plain :loading="appearanceSaving" :disabled="!canMutateDrive || !bgState.hasImage" @click="clearDriveBackground">
+            清除背景图
+          </el-button>
+        </el-form-item>
+      </el-form>
+    </el-drawer>
   </el-container>
 </template>
 
@@ -383,6 +427,7 @@ import {
   EditPen,
   ArrowUp,
   Close,
+  Brush,
 } from '@element-plus/icons-vue';
 import { http } from '@/api/http.js';
 import { publicConfig } from '@/config.js';
@@ -406,6 +451,18 @@ const isDark = ref(false);
 const keyword = ref('');
 const sortKey = ref('name-asc');
 const uploadSubfolder = ref('');
+
+const appearanceOpen = ref(false);
+const appearanceSaving = ref(false);
+const bgVersion = ref('');
+const bgState = reactive({
+  hasImage: false,
+  overlayOpacity: 0.74,
+  blurPx: 10,
+  updatedAt: /** @type {string | null} */ (null),
+});
+const uiOverlay = ref(0.74);
+const uiBlur = ref(10);
 
 const pasteBusy = ref(false);
 const ctxOpen = ref(false);
@@ -488,6 +545,32 @@ const displayRepo = computed(() => {
 });
 
 const canMutateDrive = computed(() => status.configured && me.role !== 'guest');
+
+const pageShellStyle = computed(() => {
+  if (!bgState.hasImage) {
+    return {
+      '--drive-bg-image': 'none',
+      '--drive-bg-blur': '0px',
+      '--drive-scrim-opacity': '0',
+    };
+  }
+  const v = encodeURIComponent(bgVersion.value || '0');
+  return {
+    '--drive-bg-image': `url("/api/drive-background?image=1&v=${v}")`,
+    '--drive-bg-blur': `${bgState.blurPx}px`,
+    '--drive-scrim-opacity': String(bgState.overlayOpacity),
+  };
+});
+
+const appearancePreviewStyle = computed(() => {
+  if (!bgState.hasImage) return {};
+  const v = encodeURIComponent(bgVersion.value || '0');
+  return {
+    '--ap-bg': `url("/api/drive-background?image=1&v=${v}")`,
+    '--ap-blur': `${uiBlur.value}px`,
+    '--ap-scrim': String(uiOverlay.value),
+  };
+});
 
 const roleLabel = computed(() => {
   const root = me.driveSub ? ` · 仓库目录 drive/${me.driveSub}/` : '';
@@ -596,6 +679,7 @@ async function bootstrap() {
     }
 
     await loadFiles();
+    await loadDriveBackground();
   } catch {
     ElMessage.error('无法连接后端，请确认已部署到 Cloudflare Pages');
   }
@@ -610,11 +694,100 @@ async function logout() {
   me.user = '';
   me.role = '';
   me.driveSub = '';
+  bgState.hasImage = false;
+  bgState.overlayOpacity = 0.74;
+  bgState.blurPx = 10;
+  bgState.updatedAt = null;
+  bgVersion.value = '';
   await router.push('/login');
 }
 
 function goAdmin() {
   router.push('/admin');
+}
+
+async function loadDriveBackground() {
+  if (!status.configured) return;
+  try {
+    const { data } = await http.get('/api/drive-background');
+    if (!data?.ok) return;
+    bgState.hasImage = Boolean(data.hasImage);
+    const s = data.settings || {};
+    bgState.overlayOpacity = typeof s.overlayOpacity === 'number' ? s.overlayOpacity : 0.74;
+    bgState.blurPx = typeof s.blurPx === 'number' ? s.blurPx : 10;
+    bgState.updatedAt = s.updatedAt || null;
+    bgVersion.value = bgState.updatedAt || String(Date.now());
+  } catch {
+    /* 未登录或网络错误时忽略 */
+  }
+}
+
+function openAppearance() {
+  uiOverlay.value = bgState.overlayOpacity;
+  uiBlur.value = bgState.blurPx;
+  appearanceOpen.value = true;
+}
+
+async function saveAppearanceSettings() {
+  if (!canMutateDrive.value) return;
+  appearanceSaving.value = true;
+  try {
+    const fd = new FormData();
+    fd.append('overlayOpacity', String(uiOverlay.value));
+    fd.append('blurPx', String(uiBlur.value));
+    await http.post('/api/drive-background', fd);
+    ElMessage.success('显示设置已保存');
+    await loadDriveBackground();
+  } catch (e) {
+    const msg = e?.response?.data?.error || e?.message || '保存失败';
+    ElMessage.error(typeof msg === 'string' ? msg : '保存失败');
+  } finally {
+    appearanceSaving.value = false;
+  }
+}
+
+async function uploadDriveBackground(opt) {
+  if (!canMutateDrive.value) return;
+  const { file, onError, onSuccess } = opt;
+  appearanceSaving.value = true;
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('overlayOpacity', String(uiOverlay.value));
+    fd.append('blurPx', String(uiBlur.value));
+    await http.post('/api/drive-background', fd, { timeout: 120000 });
+    ElMessage.success('背景图已更新');
+    await loadDriveBackground();
+    onSuccess?.();
+  } catch (e) {
+    const msg = e?.response?.data?.error || e?.message || '上传失败';
+    ElMessage.error(typeof msg === 'string' ? msg : '上传失败');
+    onError?.(e);
+  } finally {
+    appearanceSaving.value = false;
+  }
+}
+
+async function clearDriveBackground() {
+  if (!canMutateDrive.value || !bgState.hasImage) return;
+  try {
+    await ElMessageBox.confirm('将删除您仓库中的背景图与相关设置文件，是否继续？', '清除背景', { type: 'warning' });
+  } catch {
+    return;
+  }
+  appearanceSaving.value = true;
+  try {
+    await http.delete('/api/drive-background');
+    ElMessage.success('已清除背景');
+    await loadDriveBackground();
+    uiOverlay.value = bgState.overlayOpacity;
+    uiBlur.value = bgState.blurPx;
+  } catch (e) {
+    const msg = e?.response?.data?.error || e?.message || '操作失败';
+    ElMessage.error(typeof msg === 'string' ? msg : '操作失败');
+  } finally {
+    appearanceSaving.value = false;
+  }
 }
 
 async function loadFiles() {

@@ -12,7 +12,7 @@ import {
   CACHE_PRIVATE_NO_STORE,
 } from '../_utils.js';
 import { getSession } from '../_session.js';
-import { assertDriveRole, assertNotGuestWrite, isSystemDrivePath } from '../_authz.js';
+import { assertDriveRole, assertNotGuestWrite, isSystemDrivePath, isForbiddenUserWebpanPath } from '../_authz.js';
 import { sessionDriveSub, toGithubUserDrivePath } from '../_driveScope.js';
 
 export async function onRequestDelete(context) {
@@ -39,6 +39,10 @@ export async function onRequestDelete(context) {
 
   if (isSystemDrivePath(rel)) {
     return withCors(request, jsonResponse({ error: '禁止删除系统路径' }, 403));
+  }
+
+  if (isForbiddenUserWebpanPath(rel)) {
+    return withCors(request, jsonResponse({ error: '禁止删除该路径' }, 403));
   }
 
   let ghPath;

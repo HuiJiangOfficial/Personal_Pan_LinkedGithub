@@ -4,9 +4,16 @@
 import { jsonResponse } from './_utils.js';
 import { loadUserStore } from './_userStore.js';
 
+/**
+ * 禁止访问「全局」用户库路径（仓库内 drive/.webpan/system/…）。
+ * 用户自己网盘下的 .webpan/background/ 由 isForbiddenUserWebpanPath 另行约束，不在此函数拦截。
+ */
 export function isSystemDrivePath(relPath) {
-  const p = String(relPath || '').replace(/^\/+/, '');
-  return p === '.webpan' || p.startsWith('.webpan/') || p.includes('/.webpan/');
+  const p = String(relPath || '').replace(/^\/+/, '').toLowerCase();
+  if (p === '.webpan') return true;
+  if (p === '.webpan/system' || p.startsWith('.webpan/system/')) return true;
+  if (p.includes('/.webpan/system')) return true;
+  return false;
 }
 
 export function guestMayReadPath(store, relPath) {
@@ -37,6 +44,8 @@ export async function assertDriveRole(cfg, session) {
 
 export async function assertGuestPathAllowed(cfg, session, relPath) {
   if (session.role !== 'guest') return null;
+  const p = String(relPath || '').replace(/^\/+/, '');
+  if (p === '.webpan/background' || p.startsWith('.webpan/background/')) return null;
   const { data } = await loadUserStore(cfg);
   if (guestMayReadPath(data, relPath)) return null;
   return jsonResponse({ error: '访客无权访问此路径' }, 403);

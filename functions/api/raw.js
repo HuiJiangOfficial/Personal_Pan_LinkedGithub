@@ -13,7 +13,7 @@ import {
   CACHE_PRIVATE_NO_STORE,
 } from '../_utils.js';
 import { getSession } from '../_session.js';
-import { assertDriveRole, assertGuestPathAllowed, isSystemDrivePath } from '../_authz.js';
+import { assertDriveRole, assertGuestPathAllowed, isSystemDrivePath, isForbiddenUserWebpanPath } from '../_authz.js';
 import { sessionDriveSub, toGithubUserDrivePath } from '../_driveScope.js';
 
 export async function onRequestGet(context) {
@@ -38,6 +38,10 @@ export async function onRequestGet(context) {
 
   if (isSystemDrivePath(rel)) {
     return attachCors(request, jsonResponse({ error: '禁止访问系统路径' }, 403));
+  }
+
+  if (isForbiddenUserWebpanPath(rel)) {
+    return attachCors(request, jsonResponse({ error: '禁止访问该路径' }, 403));
   }
 
   bad = await assertGuestPathAllowed(cfg, session, rel);
