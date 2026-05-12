@@ -28,20 +28,44 @@ export function assertEnv(cfg) {
 }
 
 export function jsonResponse(data, status = 200, extraHeaders = {}) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      ...extraHeaders,
-    },
-  });
+  const h = new Headers();
+  h.set('Content-Type', 'application/json; charset=utf-8');
+  for (const [k, v] of Object.entries(extraHeaders)) {
+    if (k.toLowerCase() === 'set-cookie') {
+      h.append(k, String(v));
+    } else {
+      h.set(k, String(v));
+    }
+  }
+  return new Response(JSON.stringify(data), { status, headers: h });
 }
 
-/** 合并 CORS；extraHeaders 可含 Set-Cookie */
+/** 合并 CORS；extraHeaders 可含 Set-Cookie（须用 append，Workers 中 set 会失效） */
 export function withCors(request, response, extraHeaders = {}) {
+  let setCookies = [];
+  if (typeof response.headers.getSetCookie === 'function') {
+    setCookies = response.headers.getSetCookie();
+  } else {
+    const one = response.headers.get('Set-Cookie');
+    if (one) setCookies = [one];
+  }
+
   const h = new Headers(response.headers);
+  if (setCookies.length > 0) {
+    h.delete('Set-Cookie');
+    for (const c of setCookies) {
+      h.append('Set-Cookie', c);
+    }
+  }
+
   Object.entries(corsHeaders(request)).forEach(([k, v]) => h.set(k, v));
-  Object.entries(extraHeaders).forEach(([k, v]) => h.set(k, v));
+  for (const [k, v] of Object.entries(extraHeaders)) {
+    if (k.toLowerCase() === 'set-cookie') {
+      h.append(k, String(v));
+    } else {
+      h.set(k, String(v));
+    }
+  }
   return new Response(response.body, { status: response.status, headers: h });
 }
 

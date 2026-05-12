@@ -27,9 +27,12 @@ export async function onRequestPost(context) {
     if (username.toLowerCase() === adminName.toLowerCase()) {
       if (cfg.adminPassword && password === cfg.adminPassword) {
         const token = await issueSession(env, { sub: adminName, role: 'admin' });
-        return withCors(request, jsonResponse({ ok: true, role: 'admin', user: adminName }), 200, {
-          'Set-Cookie': setSessionCookie(token, env),
-        });
+        return withCors(
+          request,
+          jsonResponse({ ok: true, role: 'admin', user: adminName }, 200, {
+            'Set-Cookie': setSessionCookie(token, env),
+          })
+        );
       }
       return withCors(request, jsonResponse({ error: '管理员账号或密码错误' }, 401));
     }
@@ -42,9 +45,12 @@ export async function onRequestPost(context) {
     const ok = await verifyPassword(password, u);
     if (!ok) return withCors(request, jsonResponse({ error: '用户不存在或密码错误' }, 401));
     const token = await issueSession(env, { sub: u.username, role: 'user' });
-    return withCors(request, jsonResponse({ ok: true, role: 'user', user: u.username }), 200, {
-      'Set-Cookie': setSessionCookie(token, env),
-    });
+    return withCors(
+      request,
+      jsonResponse({ ok: true, role: 'user', user: u.username }, 200, {
+        'Set-Cookie': setSessionCookie(token, env),
+      })
+    );
   } catch (e) {
     return withCors(request, jsonResponse({ error: e instanceof Error ? e.message : String(e) }, 500));
   }

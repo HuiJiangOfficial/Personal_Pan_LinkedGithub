@@ -15,9 +15,12 @@ export async function onRequestPost(context) {
       return withCors(request, jsonResponse({ error: '访客模式未开启' }, 403));
     }
     const token = await issueSession(env, { sub: 'guest', role: 'guest' });
-    return withCors(request, jsonResponse({ ok: true, role: 'guest', user: 'guest' }), 200, {
-      'Set-Cookie': setSessionCookie(token, env),
-    });
+    return withCors(
+      request,
+      jsonResponse({ ok: true, role: 'guest', user: 'guest' }, 200, {
+        'Set-Cookie': setSessionCookie(token, env),
+      })
+    );
   } catch (e) {
     return withCors(request, jsonResponse({ error: e instanceof Error ? e.message : String(e) }, 500));
   }
