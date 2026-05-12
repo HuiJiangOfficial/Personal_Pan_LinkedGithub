@@ -1,5 +1,7 @@
 # 这是一个使用GitHub仓库作为网盘存储服务器+Cloudflare构建WebUI的个人网盘部署方案（Cloudflare Pages + Functions）
 
+## This is a personal cloud storage deployment solution that uses GitHub repository as the storage server and builds WebUI via Cloudflare (Cloudflare Pages + Functions). 
+
 基于 **GitHub 仓库 `drive/` 目录** 作为存储、**Cloudflare Pages + Pages Functions** 提供 API 与跨域支持的轻量个人网盘。前端为 **Vue 3 + Vite + Element Plus**，无数据库。
 
 
