@@ -4,38 +4,5 @@
   "guestPaths": [],
   "allowRegistration": true,
   "ignoreGitkeep": true,
-  "users": [
-    {
-      "username": "huihui",
-      "role": "user",
-      "salt": "086d2e59ff7a750fea048707a36a7579",
-      "hash": "5620aa4f3a3db7f16fa9823e3783ce70289f4c0d0ae3da5c0616427e66461790",
-      "iterations": 100000,
-      "createdAt": "2026-05-12T01:21:47.265Z"
-    },
-    {
-      "username": "test",
-      "role": "user",
-      "salt": "0e6d0606a2e606b31baa7460d9baa40d",
-      "hash": "d0d1265ce8ccc770b71809755732f792d8dbc48db3e59a48d760972cb1c8f0c1",
-      "iterations": 100000,
-      "createdAt": "2026-05-12T03:12:04.992Z"
-    },
-    {
-      "username": "xxxy",
-      "role": "user",
-      "salt": "dc23febd238d299161b1a4c527d4597e",
-      "hash": "f6d4864d6fe0582fe927e33a2cada03183ecedfe83f8779d2fc517cad2632489",
-      "iterations": 100000,
-      "createdAt": "2026-05-12T03:12:40.645Z"
-    },
-    {
-      "username": "kandaio",
-      "role": "user",
-      "salt": "738c9c88323d042375830bbcd32b3f9e",
-      "hash": "2bde93a56bee0e030643935ac543d3d854ce8fdaf93f05168ac30fe506426c74",
-      "iterations": 100000,
-      "createdAt": "2026-05-12T04:02:43.776Z"
-    }
-  ]
+  "users": []
 }
