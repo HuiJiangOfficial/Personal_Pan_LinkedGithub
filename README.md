@@ -6,7 +6,7 @@
 
 
 
-# **部署指南请阅读[Guide.md][https://github.com/HuiJiangOfficial/Personal_Pan_LinkedGithub/blob/main/Guide.md]**
+# **部署指南请阅读[Guide(CN).md](https://github.com/HuiJiangOfficial/Personal_Pan_LinkedGithub/blob/main/Guide(CN).md)**
 
 
 
