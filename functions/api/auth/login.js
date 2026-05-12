@@ -39,7 +39,8 @@ export async function onRequestPost(context) {
 
     const { data } = await loadUserStore(cfg);
     const u = findUser(data, username);
-    if (!u || u.role !== 'user') {
+    const userRole = u?.role || 'user';
+    if (!u || userRole !== 'user') {
       return withCors(request, jsonResponse({ error: '用户不存在或密码错误' }, 401));
     }
     const ok = await verifyPassword(password, u);

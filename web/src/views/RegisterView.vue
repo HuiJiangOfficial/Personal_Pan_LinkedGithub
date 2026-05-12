@@ -31,6 +31,9 @@ import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { http } from '@/api/http.js';
 
+/** 须与 functions/api/auth/register.js 中 USER_RE 一致 */
+const USER_RE = /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,31}$/;
+
 const router = useRouter();
 const username = ref('');
 const password = ref('');
@@ -47,7 +50,28 @@ onMounted(async () => {
   }
 });
 
+function registerErrorMessage(e) {
+  const d = e?.response?.data;
+  if (d && typeof d === 'object' && typeof d.error === 'string') return d.error;
+  if (typeof d === 'string') return d;
+  if (e?.message) return e.message;
+  return '注册失败，请稍后重试';
+}
+
 async function submit() {
+  const name = username.value.trim();
+  if (!name) {
+    ElMessage.warning('请输入用户名');
+    return;
+  }
+  if (!USER_RE.test(name)) {
+    ElMessage.warning('用户名须为 3–32 位：以字母或数字开头，可含字母、数字、下划线、连字符');
+    return;
+  }
+  if (!password.value || password.value.length < 6) {
+    ElMessage.warning('密码至少 6 位');
+    return;
+  }
   if (password.value !== password2.value) {
     ElMessage.warning('两次密码不一致');
     return;
@@ -55,13 +79,19 @@ async function submit() {
   loading.value = true;
   try {
     await http.post('/api/auth/register', {
-      username: username.value.trim(),
+      username: name,
       password: password.value,
     });
-    ElMessage.success('注册成功，请登录');
-    await router.replace('/login');
-  } catch {
-    /* */
+    ElMessage.success('注册成功，正在登录…');
+    try {
+      await http.post('/api/auth/login', { username: name, password: password.value });
+      await router.replace('/drive');
+    } catch (e2) {
+      ElMessage.warning(registerErrorMessage(e2) || '自动登录失败，请手动登录');
+      await router.replace('/login');
+    }
+  } catch (e) {
+    ElMessage.error(registerErrorMessage(e));
   } finally {
     loading.value = false;
   }

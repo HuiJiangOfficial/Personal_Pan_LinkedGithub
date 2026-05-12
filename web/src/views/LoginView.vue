@@ -46,6 +46,14 @@ onMounted(async () => {
   }
 });
 
+function loginErrorMessage(e) {
+  const d = e?.response?.data;
+  if (d && typeof d === 'object' && typeof d.error === 'string') return d.error;
+  if (typeof d === 'string') return d;
+  if (e?.message) return e.message;
+  return '登录失败，请稍后重试';
+}
+
 async function submit() {
   if (!username.value.trim() || !password.value) {
     ElMessage.warning('请输入用户名和密码');
@@ -60,8 +68,11 @@ async function submit() {
     ElMessage.success('登录成功');
     const red = typeof route.query.redirect === 'string' ? route.query.redirect : '/drive';
     await router.replace(red || '/drive');
-  } catch {
-    /* 拦截器 */
+  } catch (e) {
+    // 401 时 http 拦截器已提示，避免重复弹窗
+    if (e?.response?.status !== 401) {
+      ElMessage.error(loginErrorMessage(e));
+    }
   } finally {
     loading.value = false;
   }
@@ -73,8 +84,10 @@ async function guestLogin() {
     await http.post('/api/auth/guest');
     ElMessage.success('已以访客身份进入');
     await router.replace('/drive');
-  } catch {
-    /* */
+  } catch (e) {
+    if (e?.response?.status !== 401) {
+      ElMessage.error(loginErrorMessage(e));
+    }
   } finally {
     loading.value = false;
   }
