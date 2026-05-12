@@ -10,6 +10,7 @@ import {
   githubFetch,
   normalizeRelativePath,
   guessContentType,
+  CACHE_PRIVATE_NO_STORE,
 } from '../_utils.js';
 import { getSession } from '../_session.js';
 import { assertDriveRole, assertGuestPathAllowed, isSystemDrivePath } from '../_authz.js';
@@ -61,7 +62,11 @@ export async function onRequestGet(context) {
     const errText = await ghRes.text();
     return attachCors(
       request,
-      jsonResponse({ error: '读取文件失败', status: ghRes.status, detail: errText.slice(0, 500) }, ghRes.status === 404 ? 404 : 502)
+      jsonResponse(
+        { error: '读取文件失败', status: ghRes.status, detail: errText.slice(0, 500) },
+        ghRes.status === 404 ? 404 : 502,
+        CACHE_PRIVATE_NO_STORE
+      )
     );
   }
 
@@ -70,7 +75,9 @@ export async function onRequestGet(context) {
   const headers = new Headers();
   headers.set('Content-Type', guessContentType(rel));
   headers.set('Content-Disposition', `${disposition}; filename*=UTF-8''${encodeURIComponent(filename)}`);
-  headers.set('Cache-Control', 'private, max-age=120');
+  headers.set('Cache-Control', CACHE_PRIVATE_NO_STORE['Cache-Control']);
+  headers.set('Pragma', CACHE_PRIVATE_NO_STORE['Pragma']);
+  headers.set('CDN-Cache-Control', CACHE_PRIVATE_NO_STORE['CDN-Cache-Control']);
   Object.entries(corsHeaders(request)).forEach(([k, v]) => headers.set(k, v));
 
   return new Response(ghRes.body, { status: 200, headers });

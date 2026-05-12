@@ -14,6 +14,13 @@ export function readEnv(env) {
   return { owner, repo, branch, token, jwtSecret, adminUsername, adminPassword };
 }
 
+/** 随用户/会话变化的 JSON 或文件内容：禁止 CDN/代理按 URL 复用他人响应 */
+export const CACHE_PRIVATE_NO_STORE = {
+  'Cache-Control': 'private, no-store, must-revalidate',
+  Pragma: 'no-cache',
+  'CDN-Cache-Control': 'no-store',
+};
+
 export function assertEnv(cfg) {
   if (!cfg.owner || !cfg.repo || !cfg.token) {
     return jsonResponse(

@@ -9,6 +9,7 @@ import {
   githubFetch,
   normalizeRelativePath,
   githubErrorBody,
+  CACHE_PRIVATE_NO_STORE,
 } from '../_utils.js';
 import { getSession } from '../_session.js';
 import { assertDriveRole, assertNotGuestWrite, isSystemDrivePath } from '../_authz.js';
@@ -82,5 +83,5 @@ export async function onRequestDelete(context) {
     return withCors(request, jsonResponse({ error: '删除失败', detail, status: delRes.status }, 502));
   }
 
-  return withCors(request, jsonResponse({ ok: true, path: rel }));
+  return withCors(request, jsonResponse({ ok: true, path: rel }, 200, CACHE_PRIVATE_NO_STORE));
 }

@@ -40,6 +40,8 @@ export async function onRequest(context) {
 
   const c = corsHeaders(request);
   Object.entries(c).forEach(([k, v]) => merged.set(k, v));
+  // 避免中间层仅按 URL 复用带 Cookie 的 /api 响应
+  merged.set('Vary', 'Origin, Cookie');
 
   return new Response(response.body, {
     status: response.status,

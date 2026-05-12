@@ -1,14 +1,22 @@
 /**
- * 每用户网盘根目录：仓库内 drive/<session.sub>/，API 层路径均为相对该根的相对路径。
+ * 每用户网盘根目录：仓库内 drive/<网盘根名>/，API 层 path 均为相对该根的相对路径。
+ * 管理员使用固定根名（与 JWT 中的登录名解耦），避免与普通用户目录同名时共用仓库路径。
  */
 import { normalizeRelativePath, githubFetch, githubErrorBody, uint8ToBase64 } from './_utils.js';
 
-/** @param {{ sub?: string }} | null | undefined session */
+/** 管理员专用网盘段（无法通过 USER_RE 注册占用） */
+export const ADMIN_DRIVE_ROOT = '__webpan_admin__';
+
+/** @param {{ sub?: string, role?: string }} | null | undefined session */
 export function sessionDriveSub(session) {
-  if (!session?.sub) return null;
-  const sub = String(session.sub).trim();
+  if (!session || typeof session !== 'object') return null;
+  if (session.role === 'admin') return ADMIN_DRIVE_ROOT;
+  const raw = session.sub;
+  if (raw == null || typeof raw !== 'string') return null;
+  const sub = raw.trim();
   if (!sub || sub.includes('/') || sub.includes('\\')) return null;
   if (sub === '.' || sub === '..') return null;
+  if (sub.toLowerCase() === ADMIN_DRIVE_ROOT.toLowerCase()) return null;
   return sub;
 }
 

@@ -10,6 +10,7 @@ import {
   normalizeRelativePath,
   uint8ToBase64,
   githubErrorBody,
+  CACHE_PRIVATE_NO_STORE,
 } from '../_utils.js';
 import { getSession } from '../_session.js';
 import { assertDriveRole, assertNotGuestWrite, isSystemDrivePath } from '../_authz.js';
@@ -135,10 +136,14 @@ export async function onRequestPost(context) {
 
   return withCors(
     request,
-    jsonResponse({
-      ok: true,
-      path: relative,
-      content: json?.content || null,
-    })
+    jsonResponse(
+      {
+        ok: true,
+        path: relative,
+        content: json?.content || null,
+      },
+      200,
+      CACHE_PRIVATE_NO_STORE
+    )
   );
 }

@@ -2,7 +2,15 @@
  * GET /api/list
  * 需登录；仅列出当前用户 drive/<用户名>/ 下文件；访客按 guestPaths 过滤；隐藏 .webpan；可按设置隐藏 .gitkeep
  */
-import { readEnv, assertEnv, jsonResponse, withCors, githubFetch, githubErrorBody } from '../_utils.js';
+import {
+  readEnv,
+  assertEnv,
+  jsonResponse,
+  withCors,
+  githubFetch,
+  githubErrorBody,
+  CACHE_PRIVATE_NO_STORE,
+} from '../_utils.js';
 import { getSession } from '../_session.js';
 import { assertDriveRole, isSystemDrivePath, guestMayReadPath } from '../_authz.js';
 import { loadUserStore } from '../_userStore.js';
@@ -84,12 +92,17 @@ export async function onRequestGet(context) {
 
     return withCors(
       request,
-      jsonResponse({
-        ok: true,
-        branch: cfg.branch,
-        truncated,
-        files,
-      })
+      jsonResponse(
+        {
+          ok: true,
+          branch: cfg.branch,
+          truncated,
+          files,
+          driveSub: sub,
+        },
+        200,
+        CACHE_PRIVATE_NO_STORE
+      )
     );
   } catch (e) {
     return withCors(request, jsonResponse({ error: e instanceof Error ? e.message : String(e) }, 500));

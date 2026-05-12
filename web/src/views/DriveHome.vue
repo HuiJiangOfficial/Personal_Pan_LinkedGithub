@@ -449,6 +449,8 @@ const status = reactive({
 const me = reactive({
   user: '',
   role: /** @type {''|'admin'|'user'|'guest'} */ (''),
+  /** 仓库内网盘根目录名，与 JWT 登录名可能不同（管理员固定为 __webpan_admin__） */
+  driveSub: '',
 });
 
 const files = ref([]);
@@ -488,9 +490,10 @@ const displayRepo = computed(() => {
 const canMutateDrive = computed(() => status.configured && me.role !== 'guest');
 
 const roleLabel = computed(() => {
-  if (me.role === 'admin') return '管理员';
-  if (me.role === 'user') return `用户 · ${me.user}`;
-  if (me.role === 'guest') return '访客（只读·白名单）';
+  const root = me.driveSub ? ` · 仓库目录 drive/${me.driveSub}/` : '';
+  if (me.role === 'admin') return `管理员${root}`;
+  if (me.role === 'user') return `用户 · ${me.user}${root}`;
+  if (me.role === 'guest') return `访客（只读·白名单）${root}`;
   return '';
 });
 
@@ -589,6 +592,7 @@ async function bootstrap() {
     if (meRes.data?.authenticated) {
       me.user = meRes.data.user || '';
       me.role = meRes.data.role || '';
+      me.driveSub = meRes.data.driveSub || '';
     }
 
     await loadFiles();
@@ -605,6 +609,7 @@ async function logout() {
   }
   me.user = '';
   me.role = '';
+  me.driveSub = '';
   await router.push('/login');
 }
 
@@ -618,6 +623,7 @@ async function loadFiles() {
   try {
     const { data } = await http.get('/api/list');
     files.value = Array.isArray(data.files) ? data.files : [];
+    if (data.driveSub) me.driveSub = data.driveSub;
     status.truncated = Boolean(data.truncated);
     if (data.branch) status.branch = data.branch;
   } catch (e) {

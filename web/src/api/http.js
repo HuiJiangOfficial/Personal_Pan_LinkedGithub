@@ -5,6 +5,10 @@ export const http = axios.create({
   baseURL: '',
   timeout: 120000,
   withCredentials: true,
+  headers: {
+    'Cache-Control': 'no-cache',
+    Pragma: 'no-cache',
+  },
 });
 
 http.interceptors.response.use(
