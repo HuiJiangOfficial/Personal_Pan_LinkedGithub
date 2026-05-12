@@ -1,7 +1,11 @@
 /**
  * 密码存储：PBKDF2-SHA256（不可逆）；与「加密保存」语义一致，服务端永不存明文
+ *
+ * Cloudflare Workers 的 crypto.subtle.deriveBits 对 PBKDF2 要求 iterations ≤ 100000，
+ * 超过会报错：iteration counts above 100000 are not supported。
  */
-const ITER = 120000;
+const MAX_PBKDF2_ITER = 100000;
+const ITER = 100000;
 
 function hexToBuf(hex) {
   const out = new Uint8Array(hex.length / 2);
@@ -31,7 +35,8 @@ export async function verifyPassword(plain, stored) {
   if (!stored?.salt || !stored?.hash) return false;
   const enc = new TextEncoder();
   const salt = hexToBuf(String(stored.salt));
-  const iterations = Number(stored.iterations) || ITER;
+  const rawIter = Number(stored.iterations);
+  const iterations = Math.min(rawIter > 0 ? rawIter : ITER, MAX_PBKDF2_ITER);
   const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(plain), 'PBKDF2', false, ['deriveBits']);
   const bits = await crypto.subtle.deriveBits(
     { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
