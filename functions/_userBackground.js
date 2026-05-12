@@ -31,8 +31,8 @@ export function isHiddenFromUserDriveList(relPath) {
 export function defaultBackgroundSettings() {
   return {
     version: 1,
-    overlayOpacity: 0.74,
-    blurPx: 10,
+    overlayOpacity: 0.48,
+    blurPx: 3,
     imageExt: null,
     updatedAt: null,
   };
@@ -62,13 +62,13 @@ export function bgBlobRel(ext) {
 
 export function clampOverlay(n) {
   const x = Number(n);
-  if (Number.isNaN(x)) return 0.74;
-  return Math.min(0.92, Math.max(0.25, x));
+  if (Number.isNaN(x)) return 0.48;
+  return Math.min(0.88, Math.max(0.12, x));
 }
 
 export function clampBlur(n) {
   const x = Number(n);
-  if (Number.isNaN(x)) return 10;
+  if (Number.isNaN(x)) return 3;
   return Math.min(24, Math.max(0, Math.round(x)));
 }
 

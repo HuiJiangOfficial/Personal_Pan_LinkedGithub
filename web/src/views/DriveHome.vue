@@ -372,7 +372,18 @@
       <el-alert v-if="!canMutateDrive" type="info" show-icon :closable="false" title="当前为只读账号" class="appearance-alert" />
       <div v-if="bgState.hasImage" class="appearance-preview-wrap">
         <span class="appearance-label">当前预览</span>
-        <div class="appearance-preview" :style="appearancePreviewStyle" />
+        <p class="appearance-preview-hint">展示原图（含 GIF 动效），与下方「蒙层 / 模糊」仅作用于主界面无关。</p>
+        <div class="appearance-preview--native">
+          <img
+            class="appearance-preview__img"
+            :src="appearancePreviewSrc"
+            alt="背景图原图预览"
+            loading="lazy"
+            decoding="async"
+            @load="onAppearancePreviewImgLoad"
+            @error="onAppearancePreviewImgError"
+          />
+        </div>
       </div>
       <el-form label-position="top" class="appearance-form">
         <el-form-item label="上传背景图（JPG / PNG / GIF，最大 4MB）">
@@ -387,10 +398,10 @@
             <div class="appearance-upload-text">拖拽或点击上传</div>
           </el-upload>
         </el-form-item>
-        <el-form-item label="内容区蒙层（越高背景越淡，界面越清晰）">
-          <el-slider v-model="uiOverlay" :min="0.25" :max="0.92" :step="0.01" show-input :show-input-controls="false" />
+        <el-form-item label="主界面蒙层（越高越偏实色，背景图越淡；调低则更清晰）">
+          <el-slider v-model="uiOverlay" :min="0.12" :max="0.88" :step="0.01" show-input :show-input-controls="false" />
         </el-form-item>
-        <el-form-item label="背景模糊（像素）">
+        <el-form-item label="主界面背景模糊（像素，0 最清晰）">
           <el-slider v-model="uiBlur" :min="0" :max="24" :step="1" show-input />
         </el-form-item>
         <el-form-item>
@@ -468,12 +479,14 @@ const appearanceSaving = ref(false);
 const bgVersion = ref('');
 const bgState = reactive({
   hasImage: false,
-  overlayOpacity: 0.74,
-  blurPx: 10,
+  overlayOpacity: 0.48,
+  blurPx: 3,
   updatedAt: /** @type {string | null} */ (null),
 });
-const uiOverlay = ref(0.74);
-const uiBlur = ref(10);
+const uiOverlay = ref(0.48);
+const uiBlur = ref(3);
+/** 原图预览加载失败时提示一次 */
+const appearancePreviewImgFailed = ref(false);
 
 const pasteBusy = ref(false);
 const ctxOpen = ref(false);
@@ -573,14 +586,25 @@ const pageShellStyle = computed(() => {
   };
 });
 
-const appearancePreviewStyle = computed(() => {
-  if (!bgState.hasImage) return {};
+/** 管理页「当前预览」用 img 拉原图（与主界面 CSS 模糊/蒙层分离） */
+const appearancePreviewSrc = computed(() => {
+  if (!bgState.hasImage) return '';
   const v = encodeURIComponent(bgVersion.value || '0');
-  return {
-    '--ap-bg': `url("/api/drive-background?image=1&v=${v}")`,
-    '--ap-blur': `${uiBlur.value}px`,
-    '--ap-scrim': String(uiOverlay.value),
-  };
+  return `/api/drive-background?image=1&v=${v}`;
+});
+
+function onAppearancePreviewImgError() {
+  if (appearancePreviewImgFailed.value) return;
+  appearancePreviewImgFailed.value = true;
+  ElMessage.warning('背景原图预览加载失败，请尝试刷新页面或重新上传');
+}
+
+function onAppearancePreviewImgLoad() {
+  appearancePreviewImgFailed.value = false;
+}
+
+watch(appearancePreviewSrc, () => {
+  appearancePreviewImgFailed.value = false;
 });
 
 const roleLabel = computed(() => {
@@ -706,8 +730,8 @@ async function logout() {
   me.role = '';
   me.driveSub = '';
   bgState.hasImage = false;
-  bgState.overlayOpacity = 0.74;
-  bgState.blurPx = 10;
+  bgState.overlayOpacity = 0.48;
+  bgState.blurPx = 3;
   bgState.updatedAt = null;
   bgVersion.value = '';
   await router.push('/login');
@@ -724,8 +748,8 @@ async function loadDriveBackground() {
     if (!data?.ok) return;
     bgState.hasImage = Boolean(data.hasImage);
     const s = data.settings || {};
-    bgState.overlayOpacity = typeof s.overlayOpacity === 'number' ? s.overlayOpacity : 0.74;
-    bgState.blurPx = typeof s.blurPx === 'number' ? s.blurPx : 10;
+    bgState.overlayOpacity = typeof s.overlayOpacity === 'number' ? s.overlayOpacity : 0.48;
+    bgState.blurPx = typeof s.blurPx === 'number' ? s.blurPx : 3;
     bgState.updatedAt = s.updatedAt || null;
     bgVersion.value = bgState.updatedAt || String(Date.now());
   } catch {
@@ -1639,7 +1663,7 @@ async function handleUpload(option) {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  transform: scale(1.06);
+  transform: scale(1.02);
   filter: blur(var(--drive-bg-blur, 0px));
   will-change: filter;
 }
@@ -1660,17 +1684,17 @@ async function handleUpload(option) {
 }
 
 .header__shell.glass-panel {
-  border-radius: 18px;
+  border-radius: 22px;
   padding: 18px 20px 14px;
   background: color-mix(in srgb, var(--el-bg-color) 88%, transparent);
-  border: 1px solid color-mix(in srgb, var(--el-border-color) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--el-border-color) 50%, transparent);
   box-shadow: 0 12px 40px rgba(15, 23, 42, 0.08);
   backdrop-filter: blur(14px) saturate(1.15);
   -webkit-backdrop-filter: blur(14px) saturate(1.15);
 }
 
 .page--has-bg .header__shell.glass-panel {
-  background: color-mix(in srgb, var(--el-bg-color) 72%, transparent);
+  background: color-mix(in srgb, var(--el-bg-color) 56%, transparent);
   box-shadow: 0 16px 48px rgba(15, 23, 42, 0.1);
 }
 
@@ -1681,29 +1705,30 @@ html.dark .header__shell.glass-panel {
 .glass-card {
   --el-card-bg-color: color-mix(in srgb, var(--el-bg-color) 86%, transparent);
   border: 1px solid color-mix(in srgb, var(--el-border-color-lighter) 80%, transparent);
+  border-radius: 18px;
   backdrop-filter: blur(16px) saturate(1.1);
   -webkit-backdrop-filter: blur(16px) saturate(1.1);
 }
 
 .page--has-bg .glass-card {
-  --el-card-bg-color: color-mix(in srgb, var(--el-bg-color) 68%, transparent);
+  --el-card-bg-color: color-mix(in srgb, var(--el-bg-color) 52%, transparent);
 }
 
 .page--has-bg .toolbar {
-  background: color-mix(in srgb, var(--el-bg-color) 70%, transparent);
-  border-color: color-mix(in srgb, var(--el-border-color-lighter) 75%, transparent);
+  background: color-mix(in srgb, var(--el-bg-color) 54%, transparent);
+  border-color: color-mix(in srgb, var(--el-border-color-lighter) 70%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
 
 .page--has-bg .m-card {
-  background: color-mix(in srgb, var(--el-bg-color) 72%, transparent);
+  background: color-mix(in srgb, var(--el-bg-color) 54%, transparent);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
 
 .page--has-bg .card--upload {
-  --el-card-bg-color: color-mix(in srgb, var(--el-bg-color) 75%, transparent);
+  --el-card-bg-color: color-mix(in srgb, var(--el-bg-color) 56%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
@@ -1748,6 +1773,13 @@ html.dark .header__shell.glass-panel {
   margin-bottom: 16px;
 }
 
+.appearance-preview-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--el-text-color-secondary);
+}
+
 .appearance-preview-wrap {
   margin-bottom: 18px;
 }
@@ -1757,32 +1789,28 @@ html.dark .header__shell.glass-panel {
   font-size: 12px;
   font-weight: 600;
   color: var(--el-text-color-regular);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
-.appearance-preview {
-  height: 120px;
-  border-radius: 12px;
+.appearance-preview--native {
+  height: 148px;
+  border-radius: 16px;
   overflow: hidden;
   border: 1px solid var(--el-border-color-lighter);
-  background-image: var(--ap-bg);
-  background-size: cover;
-  background-position: center;
-  position: relative;
-  transform: scale(1.04);
-  filter: blur(var(--ap-blur, 0px));
+  background: var(--el-fill-color-light);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--el-border-color) 25%, transparent);
 }
 
-.appearance-preview::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: color-mix(in srgb, var(--el-bg-color) calc(var(--ap-scrim, 0.74) * 100%), transparent);
-  pointer-events: none;
+.appearance-preview__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
 }
 
 .appearance-form :deep(.el-upload-dragger) {
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 28px 16px;
   background: var(--el-fill-color-blank);
   border-color: var(--el-border-color);
@@ -1888,15 +1916,20 @@ html.dark .title {
 
 .alert-block {
   margin-bottom: 12px;
-  border-radius: 10px;
+  border-radius: 14px;
 }
 
 .toolbar {
   margin-top: 4px;
   padding: 12px;
-  border-radius: 12px;
+  border-radius: 16px;
   background: var(--el-bg-color);
   border: 1px solid var(--el-border-color-lighter);
+}
+
+.toolbar :deep(.el-input__wrapper),
+.toolbar :deep(.el-select .el-input__wrapper) {
+  border-radius: 12px;
 }
 
 .toolbar--sticky {
@@ -1945,7 +1978,7 @@ html.dark .title {
 }
 
 .card {
-  border-radius: 14px;
+  border-radius: 18px;
   overflow: hidden;
 }
 
@@ -1969,6 +2002,26 @@ html.dark .title {
 
 .data-table {
   min-width: 560px;
+}
+
+.glass-card :deep(.el-card__body) {
+  border-radius: 0 0 18px 18px;
+}
+
+.glass-card :deep(.el-table) {
+  --el-table-border-color: color-mix(in srgb, var(--el-border-color-lighter) 85%, transparent);
+}
+
+.glass-card :deep(.el-table th.el-table__cell) {
+  border-radius: 0;
+}
+
+.page--has-bg .glass-card :deep(.el-table tr) {
+  background-color: color-mix(in srgb, var(--el-fill-color-blank) 55%, transparent);
+}
+
+.page--has-bg .glass-card :deep(.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell) {
+  background-color: color-mix(in srgb, var(--el-fill-color-light) 45%, transparent);
 }
 
 .file-name {
@@ -2018,7 +2071,7 @@ html.dark .title {
   gap: 12px;
   padding: 14px 12px;
   margin-bottom: 10px;
-  border-radius: 12px;
+  border-radius: 16px;
   border: 1px solid var(--el-border-color-lighter);
   background: var(--el-bg-color-overlay);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
@@ -2041,7 +2094,7 @@ html.dark .title {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
+  border-radius: 14px;
   background: var(--el-fill-color-light);
 }
 
@@ -2100,6 +2153,7 @@ html.dark .title {
 
 .upload-drag :deep(.el-upload-dragger) {
   padding: 24px 16px;
+  border-radius: 16px;
 }
 
 .upload-drag__icon {
@@ -2145,7 +2199,7 @@ html.dark .title {
   width: 100%;
   height: 100%;
   border: 0;
-  border-radius: 8px;
+  border-radius: 14px;
 }
 
 .preview-text {
