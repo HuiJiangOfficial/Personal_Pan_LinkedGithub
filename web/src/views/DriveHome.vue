@@ -117,7 +117,7 @@
     <el-main class="main">
       <el-card v-if="status.configured" class="card" shadow="hover">
         <!-- 桌面：表格 -->
-        <div v-if="!isMobile" class="table-wrap" @contextmenu.prevent="onTableWrapContextMenu">
+        <div v-if="!isMobile" class="table-wrap table-wrap--ctx" @contextmenu="onTableSurfaceContextmenu">
           <el-table
             :data="displayFiles"
             stripe
@@ -1275,8 +1275,18 @@ function onRowContextMenu(row, _col, e) {
   openCtx(e.clientX, e.clientY);
 }
 
-function onTableWrapContextMenu(e) {
-  if (e.target.closest?.('.el-table__row')) return;
+/** 是否为「真实数据行」右键（排除表头、空列表占位行） */
+function isDataRowContextMenuTarget(e) {
+  if (e.target.closest?.('.el-table__header-wrapper')) return false;
+  const tr = e.target.closest?.('tbody tr.el-table__row');
+  if (!tr) return false;
+  if (tr.querySelector?.('.el-table__empty-block')) return false;
+  return true;
+}
+
+function onTableSurfaceContextmenu(e) {
+  e.preventDefault();
+  if (isDataRowContextMenuTarget(e)) return;
   ctxRow.value = null;
   ctxItems.value = buildBlankCtxItems();
   openCtx(e.clientX, e.clientY);
@@ -1571,6 +1581,10 @@ html.dark .title {
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+.table-wrap--ctx {
+  min-height: min(380px, 52vh);
 }
 
 .data-table {
