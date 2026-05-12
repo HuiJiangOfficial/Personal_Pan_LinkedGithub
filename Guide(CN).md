@@ -39,7 +39,7 @@ cd <仓库目录名>
 2. 创建 **classic** token，至少勾选 **`repo`**（私有仓库必选；公开仓库可勾选 `public_repo`）。  
 3. 复制生成的 token，**只保存在安全位置**（密码管理器或 Cloudflare 机密），不要写进代码或截图外传。
 
-该 token 由 **Cloudflare Pages Functions** 在服务端调用 GitHub API，用户浏览器**永远不应**拿到它。
+该 token 由 **Cloudflare Pages Functions** 在服务端调用 GitHub API，用户浏览器得不到它。
 
 ---
 
@@ -72,6 +72,8 @@ npm run build
 2. 授权 GitHub，选择你的仓库与分支（通常为 `main`）。
 
 ### 5.2 构建设置（Build）
+
+### （一开始创建不要错选成创建Worker了！！！如果选成Worker请删除重新找到新建Pages的入口重试）
 
 | 配置项 | 建议值 |
 |--------|--------|
