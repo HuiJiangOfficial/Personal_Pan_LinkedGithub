@@ -1,6 +1,14 @@
-# GitHub 个人网盘（Cloudflare Pages + Functions）
+# 这是一个使用GitHub仓库作为网盘存储服务器+Cloudflare构建WebUI的个人网盘部署方案（Cloudflare Pages + Functions）
 
 基于 **GitHub 仓库 `drive/` 目录** 作为存储、**Cloudflare Pages + Pages Functions** 提供 API 与跨域支持的轻量个人网盘。前端为 **Vue 3 + Vite + Element Plus**，无数据库。
+
+
+
+# **部署指南请阅读[Guide.md][https://github.com/HuiJiangOfficial/Personal_Pan_LinkedGithub/blob/main/Guide.md]**
+
+
+
+
 
 ## 功能概览
 
@@ -26,9 +34,13 @@
 └── README.md
 ```
 
+
+
+## **以下部署教程为简略教程，详细教程请阅读[Guide.md](https://github.com/HuiJiangOfficial/Personal_Pan_LinkedGithub/blob/main/Guide.md)**
+
 ## 一、准备 GitHub
 
-1. 使用本仓库（或 Fork），确保存在 `drive/` 目录。
+1. 克隆本仓库。
 2. 在 GitHub 创建 **Personal Access Token（classic）**，勾选 **`repo`**（私有仓库必选；公开仓库可勾选 `public_repo`）。
 3. 记录你的 **用户名 / 仓库名 / 默认分支**（一般为 `main`）。
 
@@ -145,4 +157,4 @@ npx wrangler pages download config <Pages项目名>
 
 ## 六、开源协议
 
-MIT（若你需其它协议可自行修改）。
+MPL 2.0
