@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { ElMessage } from 'element-plus';
+import { presentApiError } from '@/errors/presentError.js';
 
 export const http = axios.create({
   baseURL: '',
@@ -14,10 +14,10 @@ export const http = axios.create({
 http.interceptors.response.use(
   (res) => res,
   (err) => {
-    const msg = err?.response?.data?.error || err.message || '请求失败';
-    if (err?.response?.status === 401) {
-      ElMessage.error(msg);
+    if (err.config?.skipGlobalErrorHandler === true) {
+      return Promise.reject(err);
     }
+    void presentApiError(err, { from: 'http' });
     return Promise.reject(err);
   }
 );

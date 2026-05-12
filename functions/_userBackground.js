@@ -13,14 +13,12 @@ export function pathSegments(relPath) {
     .filter(Boolean);
 }
 
-/** 禁止用户通过通用上传/读写访问的 .webpan 路径（除 .webpan/background 外） */
+/**
+ * 禁止通过通用上传 / raw / 删除 访问网盘内任意 `.webpan/**`（含背景素材）。
+ * 背景仅允许由 `/api/drive-background` 在服务端按会话写入，避免绕过鉴权或路径猜测。
+ */
 export function isForbiddenUserWebpanPath(relPath) {
-  const parts = pathSegments(relPath);
-  const i = parts.findIndex((s) => s.toLowerCase() === '.webpan');
-  if (i === -1) return false;
-  const next = parts[i + 1];
-  if (next && next.toLowerCase() === 'background') return false;
-  return true;
+  return pathSegments(relPath).some((s) => s.toLowerCase() === '.webpan');
 }
 
 /** 主文件列表中隐藏用户 .webpan 下内容（含背景素材） */
@@ -31,8 +29,8 @@ export function isHiddenFromUserDriveList(relPath) {
 export function defaultBackgroundSettings() {
   return {
     version: 1,
-    overlayOpacity: 0.48,
-    blurPx: 3,
+    overlayOpacity: 0.32,
+    blurPx: 2,
     imageExt: null,
     updatedAt: null,
   };
@@ -62,14 +60,14 @@ export function bgBlobRel(ext) {
 
 export function clampOverlay(n) {
   const x = Number(n);
-  if (Number.isNaN(x)) return 0.48;
-  return Math.min(0.88, Math.max(0.12, x));
+  if (Number.isNaN(x)) return 0.32;
+  return Math.min(0.78, Math.max(0.08, x));
 }
 
 export function clampBlur(n) {
   const x = Number(n);
-  if (Number.isNaN(x)) return 3;
-  return Math.min(24, Math.max(0, Math.round(x)));
+  if (Number.isNaN(x)) return 2;
+  return Math.min(20, Math.max(0, Math.round(x)));
 }
 
 export { MAX_BYTES as USER_BG_MAX_BYTES };

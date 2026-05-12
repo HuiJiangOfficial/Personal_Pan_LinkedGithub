@@ -3,7 +3,8 @@ import { getSession } from '../../_session.js';
 import { requireAdmin } from '../../_authz.js';
 import { loadUserStore, findUser, saveUserStore } from '../../_userStore.js';
 import { hashPassword } from '../../_password.js';
-import { putBlobAtPath, deleteAllBlobsUnderUserPrefix } from '../../_driveScope.js';
+import { putBlobAtPath, deleteAllBlobsUnderUserPrefix, ADMIN_DRIVE_ROOT } from '../../_driveScope.js';
+import { isReservedUsername } from '../../_usernamePolicy.js';
 
 const USER_RE = /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,31}$/;
 
@@ -50,7 +51,7 @@ export async function onRequestPost(context) {
     return withCors(request, jsonResponse({ error: '用户名格式无效' }, 400));
   }
   if (password.length < 6) return withCors(request, jsonResponse({ error: '密码至少 6 位' }, 400));
-  if (username.toLowerCase() === 'guest' || username.toLowerCase() === String(cfg.adminUsername).toLowerCase()) {
+  if (isReservedUsername(username, cfg.adminUsername)) {
     return withCors(request, jsonResponse({ error: '不可使用该用户名' }, 400));
   }
 
@@ -105,6 +106,9 @@ export async function onRequestDelete(context) {
     const idx = data.users.findIndex((u) => String(u.username).toLowerCase() === username.toLowerCase());
     if (idx < 0) return withCors(request, jsonResponse({ error: '用户不存在' }, 404));
     const canonical = String(data.users[idx].username);
+    if (canonical.toLowerCase() === ADMIN_DRIVE_ROOT.toLowerCase()) {
+      return withCors(request, jsonResponse({ error: '不可删除系统保留的网盘根标识用户' }, 400));
+    }
 
     let deletedFiles = 0;
     try {

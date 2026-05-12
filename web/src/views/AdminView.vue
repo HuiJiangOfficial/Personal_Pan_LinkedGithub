@@ -69,6 +69,7 @@ import { onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { http } from '@/api/http.js';
+import { presentApiError } from '@/errors/presentError.js';
 
 const router = useRouter();
 const tab = ref('s');
@@ -89,15 +90,18 @@ onMounted(async () => {
 
 async function loadAll() {
   try {
-    const [u, s] = await Promise.all([http.get('/api/admin/users'), http.get('/api/admin/settings')]);
+    const [u, s] = await Promise.all([
+      http.get('/api/admin/users', { skipGlobalErrorHandler: true }),
+      http.get('/api/admin/settings', { skipGlobalErrorHandler: true }),
+    ]);
     users.value = u.data.users || [];
     settings.guestEnabled = Boolean(s.data.guestEnabled);
     settings.allowRegistration = s.data.allowRegistration !== false;
     settings.ignoreGitkeep = s.data.ignoreGitkeep !== false;
     settings.guestPaths = Array.isArray(s.data.guestPaths) ? s.data.guestPaths : [];
     guestPathsText.value = settings.guestPaths.join('\n');
-  } catch {
-    ElMessage.error('加载失败');
+  } catch (e) {
+    void presentApiError(e, { severityOverride: 'critical' });
   }
 }
 

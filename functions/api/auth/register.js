@@ -2,6 +2,7 @@ import { readEnv, assertEnv, jsonResponse, withCors } from '../../_utils.js';
 import { loadUserStore, findUser, saveUserStore } from '../../_userStore.js';
 import { hashPassword } from '../../_password.js';
 import { putBlobAtPath } from '../../_driveScope.js';
+import { isReservedUsername } from '../../_usernamePolicy.js';
 
 const USER_RE = /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,31}$/;
 
@@ -27,8 +28,7 @@ export async function onRequestPost(context) {
     return withCors(request, jsonResponse({ error: '密码至少 6 位' }, 400));
   }
 
-  const adminName = String(cfg.adminUsername || 'admin').trim().toLowerCase();
-  if (username.toLowerCase() === 'guest' || username.toLowerCase() === adminName) {
+  if (isReservedUsername(username, cfg.adminUsername)) {
     return withCors(request, jsonResponse({ error: '该用户名不可注册' }, 400));
   }
 

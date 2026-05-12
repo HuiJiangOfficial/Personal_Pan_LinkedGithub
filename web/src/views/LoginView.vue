@@ -28,6 +28,7 @@ import { onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { http } from '@/api/http.js';
+import { presentApiError } from '@/errors/presentError.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -38,21 +39,13 @@ const opts = reactive({ guestEnabled: false, allowRegistration: true });
 
 onMounted(async () => {
   try {
-    const { data } = await http.get('/api/auth/options');
+    const { data } = await http.get('/api/auth/options', { skipGlobalErrorHandler: true });
     opts.guestEnabled = Boolean(data.guestEnabled);
     opts.allowRegistration = data.allowRegistration !== false;
   } catch {
     /* ignore */
   }
 });
-
-function loginErrorMessage(e) {
-  const d = e?.response?.data;
-  if (d && typeof d === 'object' && typeof d.error === 'string') return d.error;
-  if (typeof d === 'string') return d;
-  if (e?.message) return e.message;
-  return '登录失败，请稍后重试';
-}
 
 async function submit() {
   if (!username.value.trim() || !password.value) {
@@ -61,18 +54,19 @@ async function submit() {
   }
   loading.value = true;
   try {
-    await http.post('/api/auth/login', {
-      username: username.value.trim(),
-      password: password.value,
-    });
+    await http.post(
+      '/api/auth/login',
+      {
+        username: username.value.trim(),
+        password: password.value,
+      },
+      { skipGlobalErrorHandler: true }
+    );
     ElMessage.success('登录成功');
     const red = typeof route.query.redirect === 'string' ? route.query.redirect : '/drive';
     await router.replace(red || '/drive');
   } catch (e) {
-    // 401 时 http 拦截器已提示，避免重复弹窗
-    if (e?.response?.status !== 401) {
-      ElMessage.error(loginErrorMessage(e));
-    }
+    void presentApiError(e, { severityOverride: e?.response?.status === 401 ? 'warning' : undefined });
   } finally {
     loading.value = false;
   }
@@ -81,13 +75,11 @@ async function submit() {
 async function guestLogin() {
   loading.value = true;
   try {
-    await http.post('/api/auth/guest');
+    await http.post('/api/auth/guest', undefined, { skipGlobalErrorHandler: true });
     ElMessage.success('已以访客身份进入');
     await router.replace('/drive');
   } catch (e) {
-    if (e?.response?.status !== 401) {
-      ElMessage.error(loginErrorMessage(e));
-    }
+    void presentApiError(e, { severityOverride: 'warning' });
   } finally {
     loading.value = false;
   }

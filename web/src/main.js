@@ -9,6 +9,11 @@ import router from './router/index.js';
 import './style.css';
 
 const app = createApp(App);
+
+app.config.errorHandler = (err, instance, info) => {
+  console.error('[WebPan Vue]', info, err);
+};
+
 app.use(router);
 app.use(ElementPlus, { locale: zhCn });
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {

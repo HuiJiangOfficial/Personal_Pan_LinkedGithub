@@ -27,6 +27,7 @@ export function assertEnv(cfg) {
       {
         error:
           '服务端未配置 GITHUB_OWNER / GITHUB_REPO / GITHUB_TOKEN。请检查 wrangler.toml 的 [vars] 是否已填写仓库信息，并在控制台「机密」或 wrangler pages secret 中设置 GITHUB_TOKEN；本地可用 .dev.vars。',
+        code: 'SRV_GITHUB_INCOMPLETE',
       },
       500
     );

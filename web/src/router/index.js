@@ -32,7 +32,7 @@ router.beforeEach(async (to, _from, next) => {
     return next();
   }
   try {
-    const { data } = await http.get('/api/auth/me');
+    const { data } = await http.get('/api/auth/me', { skipGlobalErrorHandler: true });
     if (!data?.authenticated) {
       return next({ path: '/login', query: { redirect: to.fullPath } });
     }

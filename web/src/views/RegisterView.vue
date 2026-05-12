@@ -30,6 +30,7 @@ import { onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { http } from '@/api/http.js';
+import { presentApiError } from '@/errors/presentError.js';
 
 /** 须与 functions/api/auth/register.js 中 USER_RE 一致 */
 const USER_RE = /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,31}$/;
@@ -43,20 +44,12 @@ const opts = reactive({ allowRegistration: true });
 
 onMounted(async () => {
   try {
-    const { data } = await http.get('/api/auth/options');
+    const { data } = await http.get('/api/auth/options', { skipGlobalErrorHandler: true });
     opts.allowRegistration = data.allowRegistration !== false;
   } catch {
     /* */
   }
 });
-
-function registerErrorMessage(e) {
-  const d = e?.response?.data;
-  if (d && typeof d === 'object' && typeof d.error === 'string') return d.error;
-  if (typeof d === 'string') return d;
-  if (e?.message) return e.message;
-  return '注册失败，请稍后重试';
-}
 
 async function submit() {
   const name = username.value.trim();
@@ -78,21 +71,29 @@ async function submit() {
   }
   loading.value = true;
   try {
-    const { data } = await http.post('/api/auth/register', {
-      username: name,
-      password: password.value,
-    });
+    const { data } = await http.post(
+      '/api/auth/register',
+      {
+        username: name,
+        password: password.value,
+      },
+      { skipGlobalErrorHandler: true }
+    );
     if (data.warning) ElMessage.warning(data.warning);
     ElMessage.success('注册成功，正在登录…');
     try {
-      await http.post('/api/auth/login', { username: name, password: password.value });
+      await http.post(
+        '/api/auth/login',
+        { username: name, password: password.value },
+        { skipGlobalErrorHandler: true }
+      );
       await router.replace('/drive');
     } catch (e2) {
-      ElMessage.warning(registerErrorMessage(e2) || '自动登录失败，请手动登录');
+      void presentApiError(e2, { severityOverride: 'warning' });
       await router.replace('/login');
     }
   } catch (e) {
-    ElMessage.error(registerErrorMessage(e));
+    void presentApiError(e, { severityOverride: 'warning' });
   } finally {
     loading.value = false;
   }

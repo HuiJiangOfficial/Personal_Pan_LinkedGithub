@@ -10,7 +10,7 @@ export async function onRequestGet(context) {
   if (!cfg.jwtSecret) {
     return withCors(
       request,
-      jsonResponse({ ok: false, authenticated: false, reason: 'no_jwt_secret' }, 200, CACHE_PRIVATE_NO_STORE)
+      jsonResponse({ ok: false, authenticated: false, reason: 'no_jwt_secret', code: 'SRV_JWT_NOT_SET' }, 200, CACHE_PRIVATE_NO_STORE)
     );
   }
 
@@ -20,7 +20,10 @@ export async function onRequestGet(context) {
   }
   const driveSub = sessionDriveSub(session);
   if (!driveSub) {
-    return withCors(request, jsonResponse({ ok: false, authenticated: false, reason: 'bad_session' }, 401, CACHE_PRIVATE_NO_STORE));
+    return withCors(
+      request,
+      jsonResponse({ ok: false, authenticated: false, reason: 'bad_session', code: 'AUTH_SESSION_INVALID' }, 401, CACHE_PRIVATE_NO_STORE)
+    );
   }
   return withCors(
     request,

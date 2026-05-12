@@ -398,11 +398,11 @@
             <div class="appearance-upload-text">拖拽或点击上传</div>
           </el-upload>
         </el-form-item>
-        <el-form-item label="主界面蒙层（越高越偏实色，背景图越淡；调低则更清晰）">
-          <el-slider v-model="uiOverlay" :min="0.12" :max="0.88" :step="0.01" show-input :show-input-controls="false" />
+        <el-form-item label="主界面蒙层（越高越偏实色，背景越淡；调低则更清晰）">
+          <el-slider v-model="uiOverlay" :min="0.08" :max="0.78" :step="0.01" show-input :show-input-controls="false" />
         </el-form-item>
-        <el-form-item label="主界面背景模糊（像素，0 最清晰）">
-          <el-slider v-model="uiBlur" :min="0" :max="24" :step="1" show-input />
+        <el-form-item label="主界面背景模糊（像素，0 最清晰，上限 20）">
+          <el-slider v-model="uiBlur" :min="0" :max="20" :step="1" show-input />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" :loading="appearanceSaving" :disabled="!canMutateDrive" @click="saveAppearanceSettings">保存显示设置</el-button>
@@ -419,6 +419,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { presentApiError, presentByCode, presentClientWarning } from '@/errors/presentError.js';
 import {
   Refresh,
   UploadFilled,
@@ -479,12 +480,12 @@ const appearanceSaving = ref(false);
 const bgVersion = ref('');
 const bgState = reactive({
   hasImage: false,
-  overlayOpacity: 0.48,
-  blurPx: 3,
+  overlayOpacity: 0.32,
+  blurPx: 2,
   updatedAt: /** @type {string | null} */ (null),
 });
-const uiOverlay = ref(0.48);
-const uiBlur = ref(3);
+const uiOverlay = ref(0.32);
+const uiBlur = ref(2);
 /** 原图预览加载失败时提示一次 */
 const appearancePreviewImgFailed = ref(false);
 
@@ -596,7 +597,12 @@ const appearancePreviewSrc = computed(() => {
 function onAppearancePreviewImgError() {
   if (appearancePreviewImgFailed.value) return;
   appearancePreviewImgFailed.value = true;
-  ElMessage.warning('背景原图预览加载失败，请尝试刷新页面或重新上传');
+  presentClientWarning(
+    'BG_PREVIEW_LOAD_FAILED',
+    '背景原图预览失败',
+    '无法加载背景图，请刷新页面或重新上传。',
+    '请确认已登录且网络正常；若刚更换背景，可关闭抽屉后重新打开外观设置。'
+  );
 }
 
 function onAppearancePreviewImgLoad() {
@@ -695,18 +701,24 @@ onUnmounted(() => {
 
 async function bootstrap() {
   try {
-    const { data } = await http.get('/api/status');
+    const { data } = await http.get('/api/status', { skipGlobalErrorHandler: true });
     status.configured = Boolean(data.configured);
     status.branch = data.branch || status.branch;
     if (data.varsPresent && typeof data.varsPresent === 'object') {
       status.varsPresent = { ...data.varsPresent };
     }
 
+    if (data.code === 'SRV_NOT_CONFIGURED' || data.code === 'SRV_JWT_NOT_SET') {
+      await presentByCode(data.code);
+      status.configured = false;
+      return;
+    }
+
     if (!status.configured) {
       return;
     }
 
-    const meRes = await http.get('/api/auth/me');
+    const meRes = await http.get('/api/auth/me', { skipGlobalErrorHandler: true });
     if (meRes.data?.authenticated) {
       me.user = meRes.data.user || '';
       me.role = meRes.data.role || '';
@@ -715,14 +727,14 @@ async function bootstrap() {
 
     await loadFiles();
     await loadDriveBackground();
-  } catch {
-    ElMessage.error('无法连接后端，请确认已部署到 Cloudflare Pages');
+  } catch (e) {
+    await presentApiError(e, { context: 'bootstrap' });
   }
 }
 
 async function logout() {
   try {
-    await http.post('/api/auth/logout');
+    await http.post('/api/auth/logout', undefined, { skipGlobalErrorHandler: true });
   } catch {
     /* ignore */
   }
@@ -730,8 +742,8 @@ async function logout() {
   me.role = '';
   me.driveSub = '';
   bgState.hasImage = false;
-  bgState.overlayOpacity = 0.48;
-  bgState.blurPx = 3;
+  bgState.overlayOpacity = 0.32;
+  bgState.blurPx = 2;
   bgState.updatedAt = null;
   bgVersion.value = '';
   await router.push('/login');
@@ -744,12 +756,12 @@ function goAdmin() {
 async function loadDriveBackground() {
   if (!status.configured) return;
   try {
-    const { data } = await http.get('/api/drive-background');
+    const { data } = await http.get('/api/drive-background', { skipGlobalErrorHandler: true });
     if (!data?.ok) return;
     bgState.hasImage = Boolean(data.hasImage);
     const s = data.settings || {};
-    bgState.overlayOpacity = typeof s.overlayOpacity === 'number' ? s.overlayOpacity : 0.48;
-    bgState.blurPx = typeof s.blurPx === 'number' ? s.blurPx : 3;
+    bgState.overlayOpacity = typeof s.overlayOpacity === 'number' ? s.overlayOpacity : 0.32;
+    bgState.blurPx = typeof s.blurPx === 'number' ? s.blurPx : 2;
     bgState.updatedAt = s.updatedAt || null;
     bgVersion.value = bgState.updatedAt || String(Date.now());
   } catch {
@@ -770,12 +782,11 @@ async function saveAppearanceSettings() {
     const fd = new FormData();
     fd.append('overlayOpacity', String(uiOverlay.value));
     fd.append('blurPx', String(uiBlur.value));
-    await http.post('/api/drive-background', fd);
+    await http.post('/api/drive-background', fd, { skipGlobalErrorHandler: true });
     ElMessage.success('显示设置已保存');
     await loadDriveBackground();
   } catch (e) {
-    const msg = e?.response?.data?.error || e?.message || '保存失败';
-    ElMessage.error(typeof msg === 'string' ? msg : '保存失败');
+    void presentApiError(e);
   } finally {
     appearanceSaving.value = false;
   }
@@ -786,7 +797,12 @@ async function uploadDriveBackground(opt) {
   const { file, onError, onSuccess } = opt;
   const uploadFile = file?.raw ?? file;
   if (typeof uploadFile?.size === 'number' && uploadFile.size > DRIVE_BG_MAX_BYTES) {
-    ElMessage.error(`背景图须小于 ${Math.floor(DRIVE_BG_MAX_BYTES / 1024 / 1024)} MB`);
+    presentClientWarning(
+      'CLIENT_BG_TOO_LARGE',
+      '背景图过大',
+      `背景图须小于 ${Math.floor(DRIVE_BG_MAX_BYTES / 1024 / 1024)} MB。`,
+      '请压缩图片或换用较小文件后再试。'
+    );
     onError?.(new Error('文件过大'));
     return;
   }
@@ -796,13 +812,12 @@ async function uploadDriveBackground(opt) {
     fd.append('file', uploadFile);
     fd.append('overlayOpacity', String(uiOverlay.value));
     fd.append('blurPx', String(uiBlur.value));
-    await http.post('/api/drive-background', fd, { timeout: 120000 });
+    await http.post('/api/drive-background', fd, { timeout: 120000, skipGlobalErrorHandler: true });
     ElMessage.success('背景图已更新');
     await loadDriveBackground();
     onSuccess?.();
   } catch (e) {
-    const msg = e?.response?.data?.error || e?.message || '上传失败';
-    ElMessage.error(typeof msg === 'string' ? msg : '上传失败');
+    void presentApiError(e);
     onError?.(e);
   } finally {
     appearanceSaving.value = false;
@@ -822,14 +837,13 @@ async function clearDriveBackground() {
   }
   appearanceSaving.value = true;
   try {
-    await http.delete('/api/drive-background');
+    await http.delete('/api/drive-background', { skipGlobalErrorHandler: true });
     ElMessage.success('已清除背景');
     await loadDriveBackground();
     uiOverlay.value = bgState.overlayOpacity;
     uiBlur.value = bgState.blurPx;
   } catch (e) {
-    const msg = e?.response?.data?.error || e?.message || '操作失败';
-    ElMessage.error(typeof msg === 'string' ? msg : '操作失败');
+    void presentApiError(e);
   } finally {
     appearanceSaving.value = false;
   }
@@ -839,7 +853,7 @@ async function loadFiles() {
   if (!status.configured) return;
   loading.value = true;
   try {
-    const { data } = await http.get('/api/list');
+    const { data } = await http.get('/api/list', { skipGlobalErrorHandler: true });
     files.value = Array.isArray(data.files) ? data.files : [];
     if (data.driveSub) me.driveSub = data.driveSub;
     status.truncated = Boolean(data.truncated);
@@ -847,6 +861,8 @@ async function loadFiles() {
   } catch (e) {
     if (e?.response?.status === 401) {
       await router.replace('/login');
+    } else {
+      void presentApiError(e);
     }
   } finally {
     loading.value = false;
@@ -935,6 +951,7 @@ async function openPreview(row) {
     const res = await http.get('/api/raw', {
       params: { path: row.path },
       responseType: kind === 'text' ? 'text' : 'blob',
+      skipGlobalErrorHandler: true,
     });
 
     if (kind === 'text') {
@@ -943,10 +960,10 @@ async function openPreview(row) {
     }
 
     preview.url = URL.createObjectURL(res.data);
-  } catch {
+  } catch (e) {
     revokePreviewUrl();
     preview.kind = 'none';
-    ElMessage.error('预览失败');
+    void presentApiError(e, { severityOverride: 'warning' });
   }
 }
 
@@ -956,6 +973,7 @@ async function downloadFile(row) {
     const res = await http.get('/api/raw', {
       params: { path: row.path, download: 1 },
       responseType: 'blob',
+      skipGlobalErrorHandler: true,
       onDownloadProgress(ev) {
         const total = ev.total != null && ev.total > 0 ? ev.total : null;
         ctrl.updateProgress(ev.loaded, total);
@@ -977,7 +995,7 @@ async function downloadFile(row) {
   } catch (e) {
     const msg = e?.response?.data?.error || e?.message || '下载失败';
     ctrl.fail(msg);
-    ElMessage.error(typeof msg === 'string' ? msg : '下载失败');
+    void presentApiError(e, { severityOverride: 'warning' });
   }
 }
 
@@ -986,8 +1004,13 @@ async function copyPath(row) {
   try {
     await navigator.clipboard.writeText(p);
     ElMessage.success('已复制路径');
-  } catch {
-    ElMessageBox.alert(p, '路径（请手动复制）', { confirmButtonText: '关闭' });
+  } catch (e) {
+    console.warn('[WebPan]', 'CLIPBOARD_PATH_FAIL', e);
+    void ElMessageBox.alert(
+      `${p}\n\n【说明】浏览器未允许写入剪贴板。请在浏览器设置中允许本站访问剪贴板，或使用 HTTPS 访问后重试；也可手动选中上方路径复制。`,
+      '路径（请手动复制）',
+      { confirmButtonText: '关闭' }
+    );
   }
 }
 
@@ -996,8 +1019,13 @@ async function copyFileName(row) {
   try {
     await navigator.clipboard.writeText(n);
     ElMessage.success('已复制文件名');
-  } catch {
-    ElMessageBox.alert(n, '文件名（请手动复制）', { confirmButtonText: '关闭' });
+  } catch (e) {
+    console.warn('[WebPan]', 'CLIPBOARD_NAME_FAIL', e);
+    void ElMessageBox.alert(
+      `${n}\n\n【说明】浏览器未允许写入剪贴板，请手动选中复制。`,
+      '文件名（请手动复制）',
+      { confirmButtonText: '关闭' }
+    );
   }
 }
 
@@ -1148,6 +1176,7 @@ async function uploadTextToDrive(fullRelPath, textContent, mime) {
   try {
     await http.post('/api/upload', fd, {
       timeout: 300000,
+      skipGlobalErrorHandler: true,
       onUploadProgress(ev) {
         const total = ev.total != null && ev.total > 0 ? ev.total : null;
         ctrl.updateProgress(ev.loaded, total);
@@ -1158,6 +1187,7 @@ async function uploadTextToDrive(fullRelPath, textContent, mime) {
   } catch (e) {
     const msg = e?.response?.data?.error || e?.message || '上传失败';
     ctrl.fail(typeof msg === 'string' ? msg : '上传失败');
+    void presentApiError(e, { severityOverride: 'warning' });
     throw e;
   }
 }
@@ -1342,7 +1372,11 @@ async function pasteIntoDirectory(targetDir) {
       const dir = destRel.includes('/') ? destRel.slice(0, destRel.lastIndexOf('/')) : '';
       const ctrl = createTransferTask({ type: 'upload', name: destName });
       try {
-        const res = await http.get('/api/raw', { params: { path: item.path }, responseType: 'blob' });
+        const res = await http.get('/api/raw', {
+          params: { path: item.path },
+          responseType: 'blob',
+          skipGlobalErrorHandler: true,
+        });
         const blob = res.data;
         const file = new File([blob], destName, { type: blob.type || 'application/octet-stream' });
         const fd = new FormData();
@@ -1350,6 +1384,7 @@ async function pasteIntoDirectory(targetDir) {
         if (dir) fd.append('path', `${dir}/`);
         await http.post('/api/upload', fd, {
           timeout: 300000,
+          skipGlobalErrorHandler: true,
           onUploadProgress(ev) {
             const total = ev.total != null && ev.total > 0 ? ev.total : null;
             ctrl.updateProgress(ev.loaded, total);
@@ -1368,14 +1403,14 @@ async function pasteIntoDirectory(targetDir) {
 
     if (mode === 'cut') {
       for (const { item } of plan) {
-        await http.delete('/api/file', { params: { path: item.path } });
+        await http.delete('/api/file', { params: { path: item.path }, skipGlobalErrorHandler: true });
       }
     }
     clearDriveClipboard();
     ElMessage.success('粘贴完成');
     await loadFiles();
-  } catch {
-    /* 已提示 */
+  } catch (e) {
+    void presentApiError(e, { severityOverride: 'warning' });
   } finally {
     pasteBusy.value = false;
   }
@@ -1601,14 +1636,14 @@ async function removeFile(row) {
     return;
   }
   try {
-    await http.delete('/api/file', { params: { path: row.path } });
+    await http.delete('/api/file', { params: { path: row.path }, skipGlobalErrorHandler: true });
     ElMessage.success('已删除');
     if (preview.visible && preview.row?.path === row.path) {
       preview.visible = false;
     }
     await loadFiles();
-  } catch {
-    /* 拦截器 */
+  } catch (e) {
+    void presentApiError(e, { severityOverride: 'warning' });
   }
 }
 
@@ -1624,6 +1659,7 @@ async function handleUpload(option) {
   try {
     await http.post('/api/upload', fd, {
       timeout: 300000,
+      skipGlobalErrorHandler: true,
       onUploadProgress(ev) {
         const total = ev.total != null && ev.total > 0 ? ev.total : null;
         ctrl.updateProgress(ev.loaded, total);
@@ -1636,6 +1672,7 @@ async function handleUpload(option) {
   } catch (e) {
     const msg = e?.response?.data?.error || e?.message || '上传失败';
     ctrl.fail(typeof msg === 'string' ? msg : '上传失败');
+    void presentApiError(e, { severityOverride: 'warning' });
     onError?.(e);
   }
 }
@@ -1663,7 +1700,7 @@ async function handleUpload(option) {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  transform: scale(1.02);
+  transform: scale(1.01);
   filter: blur(var(--drive-bg-blur, 0px));
   will-change: filter;
 }
@@ -1689,12 +1726,12 @@ async function handleUpload(option) {
   background: color-mix(in srgb, var(--el-bg-color) 88%, transparent);
   border: 1px solid color-mix(in srgb, var(--el-border-color) 50%, transparent);
   box-shadow: 0 12px 40px rgba(15, 23, 42, 0.08);
-  backdrop-filter: blur(14px) saturate(1.15);
-  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  backdrop-filter: blur(10px) saturate(1.12);
+  -webkit-backdrop-filter: blur(10px) saturate(1.12);
 }
 
 .page--has-bg .header__shell.glass-panel {
-  background: color-mix(in srgb, var(--el-bg-color) 56%, transparent);
+  background: color-mix(in srgb, var(--el-bg-color) 44%, transparent);
   box-shadow: 0 16px 48px rgba(15, 23, 42, 0.1);
 }
 
@@ -1706,31 +1743,31 @@ html.dark .header__shell.glass-panel {
   --el-card-bg-color: color-mix(in srgb, var(--el-bg-color) 86%, transparent);
   border: 1px solid color-mix(in srgb, var(--el-border-color-lighter) 80%, transparent);
   border-radius: 18px;
-  backdrop-filter: blur(16px) saturate(1.1);
-  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+  backdrop-filter: blur(12px) saturate(1.08);
+  -webkit-backdrop-filter: blur(12px) saturate(1.08);
 }
 
 .page--has-bg .glass-card {
-  --el-card-bg-color: color-mix(in srgb, var(--el-bg-color) 52%, transparent);
+  --el-card-bg-color: color-mix(in srgb, var(--el-bg-color) 40%, transparent);
 }
 
 .page--has-bg .toolbar {
-  background: color-mix(in srgb, var(--el-bg-color) 54%, transparent);
-  border-color: color-mix(in srgb, var(--el-border-color-lighter) 70%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--el-bg-color) 42%, transparent);
+  border-color: color-mix(in srgb, var(--el-border-color-lighter) 65%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .page--has-bg .m-card {
-  background: color-mix(in srgb, var(--el-bg-color) 54%, transparent);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: color-mix(in srgb, var(--el-bg-color) 42%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .page--has-bg .card--upload {
-  --el-card-bg-color: color-mix(in srgb, var(--el-bg-color) 56%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  --el-card-bg-color: color-mix(in srgb, var(--el-bg-color) 44%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .appearance-drawer__head {
@@ -1937,7 +1974,7 @@ html.dark .title {
   top: 0;
   z-index: 20;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(6px);
 }
 
 .toolbar__row {
@@ -2017,11 +2054,11 @@ html.dark .title {
 }
 
 .page--has-bg .glass-card :deep(.el-table tr) {
-  background-color: color-mix(in srgb, var(--el-fill-color-blank) 55%, transparent);
+  background-color: color-mix(in srgb, var(--el-fill-color-blank) 38%, transparent);
 }
 
 .page--has-bg .glass-card :deep(.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell) {
-  background-color: color-mix(in srgb, var(--el-fill-color-light) 45%, transparent);
+  background-color: color-mix(in srgb, var(--el-fill-color-light) 32%, transparent);
 }
 
 .file-name {
