@@ -1,11 +1,12 @@
 /**
  * GET /api/list
- * 需登录；访客仅能看到 guestPaths 白名单内文件；隐藏 .webpan；可按设置隐藏 .gitkeep
+ * 需登录；仅列出当前用户 drive/<用户名>/ 下文件；访客按 guestPaths 过滤；隐藏 .webpan；可按设置隐藏 .gitkeep
  */
 import { readEnv, assertEnv, jsonResponse, withCors, githubFetch, githubErrorBody } from '../_utils.js';
 import { getSession } from '../_session.js';
 import { assertDriveRole, isSystemDrivePath, guestMayReadPath } from '../_authz.js';
 import { loadUserStore } from '../_userStore.js';
+import { sessionDriveSub } from '../_driveScope.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -17,6 +18,8 @@ export async function onRequestGet(context) {
   const session = await getSession(request, env);
   bad = await assertDriveRole(cfg, session);
   if (bad) return withCors(request, bad);
+  const sub = sessionDriveSub(session);
+  if (!sub) return withCors(request, jsonResponse({ error: '无效会话' }, 401));
 
   try {
     const { data: store } = await loadUserStore(cfg);
@@ -56,7 +59,7 @@ export async function onRequestGet(context) {
     /** @type {{ path: string, type: string, sha?: string, size?: number }[]} */
     const tree = Array.isArray(treeJson.tree) ? treeJson.tree : [];
 
-    const prefix = 'drive/';
+    const prefix = `drive/${sub}/`;
     let files = tree
       .filter((n) => n.type === 'blob' && typeof n.path === 'string' && n.path.startsWith(prefix))
       .map((n) => {

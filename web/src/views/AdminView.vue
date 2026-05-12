@@ -17,7 +17,7 @@
               v-model="guestPathsText"
               type="textarea"
               :rows="5"
-              placeholder="每行一条，相对于 drive/ 的路径。支持前缀目录如 public/ 或精确文件如 readme.txt。留空则访客看不到任何文件。"
+              placeholder="每行一条，相对于访客网盘根目录的路径（仓库内为 drive/guest/…）。支持前缀如 public/ 或精确文件。留空则访客看不到任何文件。"
               @blur="saveGuestPaths"
             />
           </el-form-item>
@@ -183,8 +183,9 @@ async function removeUser(row) {
     return;
   }
   try {
-    await http.delete('/api/admin/users', { params: { username: row.username } });
-    ElMessage.success('已删除');
+    const res = await http.delete('/api/admin/users', { params: { username: row.username } });
+    const n = res.data?.deletedFiles ?? 0;
+    ElMessage.success(`已删除用户，并移除仓库中 ${n} 个文件`);
     await loadAll();
   } catch {
     /* */

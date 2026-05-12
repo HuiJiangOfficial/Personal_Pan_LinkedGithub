@@ -78,10 +78,11 @@ async function submit() {
   }
   loading.value = true;
   try {
-    await http.post('/api/auth/register', {
+    const { data } = await http.post('/api/auth/register', {
       username: name,
       password: password.value,
     });
+    if (data.warning) ElMessage.warning(data.warning);
     ElMessage.success('注册成功，正在登录…');
     try {
       await http.post('/api/auth/login', { username: name, password: password.value });

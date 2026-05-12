@@ -12,6 +12,7 @@ import {
 } from '../_utils.js';
 import { getSession } from '../_session.js';
 import { assertDriveRole, assertNotGuestWrite, isSystemDrivePath } from '../_authz.js';
+import { sessionDriveSub, toGithubUserDrivePath } from '../_driveScope.js';
 
 export async function onRequestDelete(context) {
   const { request, env } = context;
@@ -25,6 +26,7 @@ export async function onRequestDelete(context) {
   if (bad) return withCors(request, bad);
   bad = await assertNotGuestWrite(session);
   if (bad) return withCors(request, bad);
+  if (!sessionDriveSub(session)) return withCors(request, jsonResponse({ error: '无效会话' }, 401));
 
   const url = new URL(request.url);
   let rel;
@@ -38,7 +40,12 @@ export async function onRequestDelete(context) {
     return withCors(request, jsonResponse({ error: '禁止删除系统路径' }, 403));
   }
 
-  const ghPath = `drive/${rel}`;
+  let ghPath;
+  try {
+    ghPath = toGithubUserDrivePath(session, rel);
+  } catch {
+    return withCors(request, jsonResponse({ error: '非法 path 参数' }, 400));
+  }
   const apiPath = `/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${ghPath
     .split('/')
     .map((s) => encodeURIComponent(s))

@@ -13,6 +13,7 @@ import {
 } from '../_utils.js';
 import { getSession } from '../_session.js';
 import { assertDriveRole, assertGuestPathAllowed, isSystemDrivePath } from '../_authz.js';
+import { sessionDriveSub, toGithubUserDrivePath } from '../_driveScope.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -24,6 +25,7 @@ export async function onRequestGet(context) {
   const session = await getSession(request, env);
   bad = await assertDriveRole(cfg, session);
   if (bad) return attachCors(request, bad);
+  if (!sessionDriveSub(session)) return attachCors(request, jsonResponse({ error: '无效会话' }, 401));
 
   const url = new URL(request.url);
   let rel;
@@ -40,7 +42,12 @@ export async function onRequestGet(context) {
   bad = await assertGuestPathAllowed(cfg, session, rel);
   if (bad) return attachCors(request, bad);
 
-  const ghPath = `drive/${rel}`;
+  let ghPath;
+  try {
+    ghPath = toGithubUserDrivePath(session, rel);
+  } catch {
+    return attachCors(request, jsonResponse({ error: '非法 path 参数' }, 400));
+  }
   const apiPath = `/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${ghPath
     .split('/')
     .map((s) => encodeURIComponent(s))

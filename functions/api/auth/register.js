@@ -1,6 +1,7 @@
 import { readEnv, assertEnv, jsonResponse, withCors } from '../../_utils.js';
 import { loadUserStore, findUser, saveUserStore } from '../../_userStore.js';
 import { hashPassword } from '../../_password.js';
+import { putBlobAtPath } from '../../_driveScope.js';
 
 const USER_RE = /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,31}$/;
 
@@ -49,6 +50,28 @@ export async function onRequestPost(context) {
       createdAt: new Date().toISOString(),
     });
     const newSha = await saveUserStore(cfg, data, sha);
+    try {
+      await putBlobAtPath(
+        cfg,
+        `drive/${username}/.gitkeep`,
+        new TextEncoder().encode('\n'),
+        `web: init drive for ${username}`
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return withCors(
+        request,
+        jsonResponse(
+          {
+            ok: true,
+            username,
+            sha: newSha,
+            warning: `账号已创建，但初始化网盘目录失败：${msg}`,
+          },
+          200
+        )
+      );
+    }
     return withCors(request, jsonResponse({ ok: true, username, sha: newSha }));
   } catch (e) {
     return withCors(request, jsonResponse({ error: e instanceof Error ? e.message : String(e) }, 500));

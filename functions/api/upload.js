@@ -13,6 +13,7 @@ import {
 } from '../_utils.js';
 import { getSession } from '../_session.js';
 import { assertDriveRole, assertNotGuestWrite, isSystemDrivePath } from '../_authz.js';
+import { sessionDriveSub, toGithubUserDrivePath } from '../_driveScope.js';
 
 const MAX_BYTES = 45 * 1024 * 1024;
 
@@ -43,6 +44,7 @@ export async function onRequestPost(context) {
   if (bad) return withCors(request, bad);
   bad = await assertNotGuestWrite(session);
   if (bad) return withCors(request, bad);
+  if (!sessionDriveSub(session)) return withCors(request, jsonResponse({ error: '无效会话' }, 401));
 
   const ct = request.headers.get('Content-Type') || '';
   if (!ct.includes('multipart/form-data')) {
@@ -82,7 +84,13 @@ export async function onRequestPost(context) {
     return withCors(request, jsonResponse({ error: '禁止上传到系统目录' }, 403));
   }
 
-  const ghSegments = ['drive', ...relative.split('/').filter(Boolean)].map((s) => encodeURIComponent(s));
+  let ghPath;
+  try {
+    ghPath = toGithubUserDrivePath(session, relative);
+  } catch {
+    return withCors(request, jsonResponse({ error: '非法保存路径' }, 400));
+  }
+  const ghSegments = ghPath.split('/').filter(Boolean).map((s) => encodeURIComponent(s));
   const putUrl = `/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${ghSegments.join('/')}`;
 
   const metaRes = await githubFetch(cfg, `${putUrl}?ref=${encodeURIComponent(cfg.branch)}`);
