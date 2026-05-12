@@ -21,7 +21,23 @@ export async function onRequest(context) {
   const response = await next();
   if (!response) return response;
 
+  // `new Headers(response.headers)` 在 Workers 中不会带上 Set-Cookie，会导致登录 Cookie 丢失、无法进入网盘
+  let setCookies = [];
+  if (typeof response.headers.getSetCookie === 'function') {
+    setCookies = response.headers.getSetCookie();
+  } else {
+    const one = response.headers.get('Set-Cookie');
+    if (one) setCookies = [one];
+  }
+
   const merged = new Headers(response.headers);
+  if (setCookies.length > 0) {
+    merged.delete('Set-Cookie');
+    for (const c of setCookies) {
+      merged.append('Set-Cookie', c);
+    }
+  }
+
   const c = corsHeaders(request);
   Object.entries(c).forEach(([k, v]) => merged.set(k, v));
 
