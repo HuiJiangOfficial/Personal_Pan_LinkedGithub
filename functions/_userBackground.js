@@ -63,7 +63,7 @@ export function bgBlobRel(ext) {
 export function clampOverlay(n) {
   const x = Number(n);
   if (Number.isNaN(x)) return 0.74;
-  return Math.min(0.9, Math.max(0.35, x));
+  return Math.min(0.92, Math.max(0.25, x));
 }
 
 export function clampBlur(n) {

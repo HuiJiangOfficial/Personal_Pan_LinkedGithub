@@ -1,7 +1,9 @@
 <template>
   <el-container class="page" :class="{ 'page--mobile': isMobile, 'page--has-bg': bgState.hasImage }" :style="pageShellStyle">
-    <div class="page__bg" aria-hidden="true" />
-    <div class="page__bg-scrim" aria-hidden="true" />
+    <template v-if="bgState.hasImage">
+      <div class="page__bg" aria-hidden="true" />
+      <div class="page__bg-scrim" aria-hidden="true" />
+    </template>
     <el-header class="header" height="auto">
       <div class="header__shell glass-panel">
         <div class="hero">
@@ -357,11 +359,17 @@
       </template>
     </el-dialog>
 
-    <el-drawer v-model="appearanceOpen" title="外观与背景" direction="rtl" size="min(420px, 92vw)" destroy-on-close class="appearance-drawer">
+    <el-drawer v-model="appearanceOpen" direction="rtl" size="min(440px, 94vw)" destroy-on-close class="appearance-drawer">
+      <template #header>
+        <div class="appearance-drawer__head">
+          <div class="appearance-drawer__title">外观与背景</div>
+          <div class="appearance-drawer__sub">仅保存在您本人网盘内的隐藏目录，其他用户无法查看或访问</div>
+        </div>
+      </template>
       <p class="appearance-intro">
-        背景图与设置保存在<strong>您本人</strong>仓库目录下的 <code>.webpan/background/</code>，不会在文件列表中展示，其他用户无法访问。
+        背景图（JPG / PNG / GIF）与显示参数写入仓库中 <code>drive/{{ me.driveSub || '…' }}/.webpan/background/</code>，不会在文件列表中出现；拉取图片始终走鉴权接口，与通用文件下载隔离。
       </p>
-      <el-alert v-if="!canMutateDrive" type="info" show-icon :closable="false" title="当前为只读账号" class="mb-16" />
+      <el-alert v-if="!canMutateDrive" type="info" show-icon :closable="false" title="当前为只读账号" class="appearance-alert" />
       <div v-if="bgState.hasImage" class="appearance-preview-wrap">
         <span class="appearance-label">当前预览</span>
         <div class="appearance-preview" :style="appearancePreviewStyle" />
@@ -379,8 +387,8 @@
             <div class="appearance-upload-text">拖拽或点击上传</div>
           </el-upload>
         </el-form-item>
-        <el-form-item label="界面蒙层浓度（越高背景越淡）">
-          <el-slider v-model="uiOverlay" :min="0.35" :max="0.9" :step="0.01" show-input :show-input-controls="false" />
+        <el-form-item label="内容区蒙层（越高背景越淡，界面越清晰）">
+          <el-slider v-model="uiOverlay" :min="0.25" :max="0.92" :step="0.01" show-input :show-input-controls="false" />
         </el-form-item>
         <el-form-item label="背景模糊（像素）">
           <el-slider v-model="uiBlur" :min="0" :max="24" :step="1" show-input />
@@ -441,6 +449,9 @@ import {
 } from '@/composables/driveClipboard.js';
 import TransferDock from '@/components/TransferDock.vue';
 import DriveContextMenu from '@/components/DriveContextMenu.vue';
+
+/** 与 functions/_userBackground.js USER_BG_MAX_BYTES 一致 */
+const DRIVE_BG_MAX_BYTES = 4 * 1024 * 1024;
 
 const router = useRouter();
 const DARK_KEY = 'github_web_pan_dark';
@@ -749,10 +760,16 @@ async function saveAppearanceSettings() {
 async function uploadDriveBackground(opt) {
   if (!canMutateDrive.value) return;
   const { file, onError, onSuccess } = opt;
+  const uploadFile = file?.raw ?? file;
+  if (typeof uploadFile?.size === 'number' && uploadFile.size > DRIVE_BG_MAX_BYTES) {
+    ElMessage.error(`背景图须小于 ${Math.floor(DRIVE_BG_MAX_BYTES / 1024 / 1024)} MB`);
+    onError?.(new Error('文件过大'));
+    return;
+  }
   appearanceSaving.value = true;
   try {
     const fd = new FormData();
-    fd.append('file', file);
+    fd.append('file', uploadFile);
     fd.append('overlayOpacity', String(uiOverlay.value));
     fd.append('blurPx', String(uiBlur.value));
     await http.post('/api/drive-background', fd, { timeout: 120000 });
@@ -771,7 +788,11 @@ async function uploadDriveBackground(opt) {
 async function clearDriveBackground() {
   if (!canMutateDrive.value || !bgState.hasImage) return;
   try {
-    await ElMessageBox.confirm('将删除您仓库中的背景图与相关设置文件，是否继续？', '清除背景', { type: 'warning' });
+    await ElMessageBox.confirm(
+      '将删除您网盘中的背景图文件，显示参数将恢复为默认。此操作会写入 GitHub 提交记录。',
+      '清除背景',
+      { type: 'warning' }
+    );
   } catch {
     return;
   }
@@ -1600,7 +1621,187 @@ async function handleUpload(option) {
 .page {
   min-height: 100%;
   flex-direction: column;
+  position: relative;
   background: linear-gradient(180deg, var(--el-fill-color-blank) 0%, var(--app-bg, #f3f5f9) 120px);
+}
+
+.page--has-bg {
+  background: transparent;
+}
+
+/* 全屏背景层：由 --drive-bg-image / --drive-bg-blur / --drive-scrim-opacity 驱动（见 pageShellStyle） */
+.page__bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: var(--drive-bg-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  transform: scale(1.06);
+  filter: blur(var(--drive-bg-blur, 0px));
+  will-change: filter;
+}
+
+.page__bg-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--el-bg-color) calc(var(--drive-scrim-opacity, 0) * 100%), transparent);
+}
+
+.header,
+.main,
+.site-footer {
+  position: relative;
+  z-index: 2;
+}
+
+.header__shell.glass-panel {
+  border-radius: 18px;
+  padding: 18px 20px 14px;
+  background: color-mix(in srgb, var(--el-bg-color) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--el-border-color) 55%, transparent);
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+}
+
+.page--has-bg .header__shell.glass-panel {
+  background: color-mix(in srgb, var(--el-bg-color) 72%, transparent);
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.1);
+}
+
+html.dark .header__shell.glass-panel {
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+.glass-card {
+  --el-card-bg-color: color-mix(in srgb, var(--el-bg-color) 86%, transparent);
+  border: 1px solid color-mix(in srgb, var(--el-border-color-lighter) 80%, transparent);
+  backdrop-filter: blur(16px) saturate(1.1);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+}
+
+.page--has-bg .glass-card {
+  --el-card-bg-color: color-mix(in srgb, var(--el-bg-color) 68%, transparent);
+}
+
+.page--has-bg .toolbar {
+  background: color-mix(in srgb, var(--el-bg-color) 70%, transparent);
+  border-color: color-mix(in srgb, var(--el-border-color-lighter) 75%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.page--has-bg .m-card {
+  background: color-mix(in srgb, var(--el-bg-color) 72%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.page--has-bg .card--upload {
+  --el-card-bg-color: color-mix(in srgb, var(--el-bg-color) 75%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.appearance-drawer__head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 28px;
+}
+
+.appearance-drawer__title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  line-height: 1.3;
+}
+
+.appearance-drawer__sub {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--el-text-color-secondary);
+  line-height: 1.45;
+}
+
+.appearance-intro {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--el-text-color-secondary);
+}
+
+.appearance-intro code {
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--el-fill-color-light);
+  word-break: break-all;
+}
+
+.appearance-alert {
+  margin-bottom: 16px;
+}
+
+.appearance-preview-wrap {
+  margin-bottom: 18px;
+}
+
+.appearance-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-text-color-regular);
+  margin-bottom: 8px;
+}
+
+.appearance-preview {
+  height: 120px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--el-border-color-lighter);
+  background-image: var(--ap-bg);
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  transform: scale(1.04);
+  filter: blur(var(--ap-blur, 0px));
+}
+
+.appearance-preview::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--el-bg-color) calc(var(--ap-scrim, 0.74) * 100%), transparent);
+  pointer-events: none;
+}
+
+.appearance-form :deep(.el-upload-dragger) {
+  border-radius: 12px;
+  padding: 28px 16px;
+  background: var(--el-fill-color-blank);
+  border-color: var(--el-border-color);
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.appearance-form :deep(.el-upload-dragger:hover) {
+  border-color: var(--el-color-primary-light-5);
+}
+
+.appearance-upload-icon {
+  font-size: 36px;
+  color: var(--el-color-primary);
+  margin-bottom: 8px;
+}
+
+.appearance-upload-text {
+  font-size: 14px;
+  color: var(--el-text-color-regular);
 }
 
 .page--mobile .main {

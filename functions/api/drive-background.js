@@ -177,7 +177,9 @@ async function streamBackgroundImage(request, cfg, session) {
     ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'application/octet-stream';
   const headers = new Headers();
   headers.set('Content-Type', mime);
-  headers.set('Cache-Control', 'private, max-age=120');
+  headers.set('Cache-Control', CACHE_PRIVATE_NO_STORE['Cache-Control']);
+  headers.set('Pragma', CACHE_PRIVATE_NO_STORE['Pragma']);
+  headers.set('CDN-Cache-Control', CACHE_PRIVATE_NO_STORE['CDN-Cache-Control']);
   Object.entries(corsHeaders(request)).forEach(([k, v]) => headers.set(k, v));
   return new Response(ghRes.body, { status: 200, headers });
 }
