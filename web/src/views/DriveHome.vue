@@ -81,6 +81,19 @@
             <el-tag type="info" effect="plain">{{ stats.count }} 个文件</el-tag>
             <el-tag type="success" effect="plain">合计 {{ formatSize(stats.totalBytes) }}</el-tag>
             <el-tag v-if="keyword.trim()" type="warning" effect="plain">筛选 {{ displayFiles.length }} 项</el-tag>
+            <el-tag v-if="hasDriveClipboard" type="primary" effect="light" class="clip-tag">{{ driveClipboardLabel }}</el-tag>
+            <el-button
+              v-if="hasDriveClipboard && canMutateDrive"
+              type="primary"
+              plain
+              size="small"
+              :icon="DocumentAdd"
+              :loading="pasteBusy"
+              @click="pasteIntoToolbarDir"
+            >
+              粘贴到当前子目录
+            </el-button>
+            <el-button v-if="hasDriveClipboard" text type="info" size="small" @click="clearClip">清空剪贴板</el-button>
           </div>
         </div>
       </div>
@@ -89,7 +102,7 @@
     <el-main class="main">
       <el-card v-if="status.configured" class="card" shadow="hover">
         <!-- 桌面：表格 -->
-        <div v-if="!isMobile" class="table-wrap">
+        <div v-if="!isMobile" class="table-wrap" @contextmenu.prevent="onTableWrapContextMenu">
           <el-table
             :data="displayFiles"
             stripe
@@ -97,6 +110,7 @@
             empty-text="暂无文件，试试上传或调整搜索条件"
             row-key="path"
             class="data-table"
+            @row-contextmenu="onRowContextMenu"
           >
             <el-table-column label="" width="52" align="center">
               <template #default="{ row }">
@@ -162,8 +176,15 @@
                     <el-dropdown-menu>
                       <el-dropdown-item command="preview">预览</el-dropdown-item>
                       <el-dropdown-item command="download">下载</el-dropdown-item>
-                      <el-dropdown-item command="copy">复制路径</el-dropdown-item>
-                      <el-dropdown-item v-if="canMutateDrive" command="delete" divided>删除</el-dropdown-item>
+                      <el-dropdown-item divided command="copyInternal">复制到剪贴板</el-dropdown-item>
+                      <el-dropdown-item v-if="canMutateDrive" command="cutInternal">剪切</el-dropdown-item>
+                      <el-dropdown-item v-if="canMutateDrive && hasDriveClipboard" command="pasteParent">粘贴到所在目录</el-dropdown-item>
+                      <el-dropdown-item v-if="canMutateDrive && hasDriveClipboard" command="pasteRoot">粘贴到根目录</el-dropdown-item>
+                      <el-dropdown-item divided command="copy">复制路径</el-dropdown-item>
+                      <el-dropdown-item command="copyName">复制文件名</el-dropdown-item>
+                      <el-dropdown-item command="props">属性</el-dropdown-item>
+                      <el-dropdown-item v-if="canMutateDrive" command="setTarget">设为上传子目录</el-dropdown-item>
+                      <el-dropdown-item v-if="canMutateDrive" command="delete" divided type="danger">删除</el-dropdown-item>
                     </el-dropdown-menu>
                   </template>
                 </el-dropdown>
@@ -228,6 +249,36 @@
 
     <TransferDock />
     <el-backtop :right="isMobile ? 16 : 24" :bottom="backtopBottom" />
+
+    <DriveContextMenu v-model="ctxOpen" :x="ctxX" :y="ctxY" :items="ctxItems" @pick="onCtxPick" />
+
+    <el-dialog v-model="propsOpen" title="属性" width="min(420px, 92vw)" destroy-on-close class="props-dialog">
+      <dl v-if="propsRow" class="props-dl">
+        <div class="props-row">
+          <dt>文件名</dt>
+          <dd>{{ propsRow.name }}</dd>
+        </div>
+        <div class="props-row">
+          <dt>路径</dt>
+          <dd class="props-mono">{{ propsRow.path }}</dd>
+        </div>
+        <div class="props-row">
+          <dt>大小</dt>
+          <dd>{{ formatSize(propsRow.size) }}</dd>
+        </div>
+        <div class="props-row">
+          <dt>类型</dt>
+          <dd>{{ fileTypeLabel(propsRow) }}</dd>
+        </div>
+        <div v-if="propsRow.sha" class="props-row">
+          <dt>SHA</dt>
+          <dd class="props-mono props-break">{{ propsRow.sha }}</dd>
+        </div>
+      </dl>
+      <template #footer>
+        <el-button type="primary" @click="propsOpen = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </el-container>
 </template>
 
@@ -251,11 +302,26 @@ import {
   ArrowDown,
   Download,
   DocumentCopy,
+  View,
+  CopyDocument,
+  Switch,
+  DocumentAdd,
+  InfoFilled,
+  Delete,
+  RefreshRight,
 } from '@element-plus/icons-vue';
 import { http } from '@/api/http.js';
 import { publicConfig } from '@/config.js';
 import { createTransferTask, transferState } from '@/composables/transferTasks.js';
+import {
+  driveClipboard,
+  driveClipboardLabel,
+  hasDriveClipboard,
+  setDriveClipboard,
+  clearDriveClipboard,
+} from '@/composables/driveClipboard.js';
 import TransferDock from '@/components/TransferDock.vue';
+import DriveContextMenu from '@/components/DriveContextMenu.vue';
 
 const router = useRouter();
 const DARK_KEY = 'github_web_pan_dark';
@@ -266,6 +332,18 @@ const isDark = ref(false);
 const keyword = ref('');
 const sortKey = ref('name-asc');
 const uploadSubfolder = ref('');
+
+const pasteBusy = ref(false);
+const ctxOpen = ref(false);
+const ctxX = ref(0);
+const ctxY = ref(0);
+/** @type {import('vue').Ref<any[]>} */
+const ctxItems = ref([]);
+/** @type {import('vue').Ref<null | { path: string, name: string, size?: number|null, sha?: string|null }>} */
+const ctxRow = ref(null);
+const propsOpen = ref(false);
+/** @type {import('vue').Ref<null | { path: string, name: string, size?: number|null, sha?: string|null }>} */
+const propsRow = ref(null);
 
 const status = reactive({
   configured: true,
@@ -595,7 +673,258 @@ async function copyPath(row) {
   }
 }
 
-/** 移动端：可预览类型点卡片即开；不可预览则避免误触弹空抽屉 */
+async function copyFileName(row) {
+  const n = row.name || '';
+  try {
+    await navigator.clipboard.writeText(n);
+    ElMessage.success('已复制文件名');
+  } catch {
+    ElMessageBox.alert(n, '文件名（请手动复制）', { confirmButtonText: '关闭' });
+  }
+}
+
+function parentDir(relPath) {
+  const s = String(relPath || '');
+  const i = s.lastIndexOf('/');
+  return i < 0 ? '' : s.slice(0, i);
+}
+
+function fileTypeLabel(row) {
+  const c = fileCategory(row);
+  const map = { image: '图片', pdf: 'PDF', text: '文本', video: '视频', audio: '音频', file: '文件' };
+  return map[c] || '文件';
+}
+
+function clearClip() {
+  clearDriveClipboard();
+  ElMessage.info('已清空剪贴板');
+}
+
+function clipOne(row) {
+  return [{ path: row.path, name: row.name, size: row.size ?? null, sha: row.sha ?? null }];
+}
+
+function doCopyInternal(row) {
+  setDriveClipboard('copy', clipOne(row));
+  ElMessage.success('已复制到剪贴板（可粘贴到其它目录）');
+}
+
+function doCutInternal(row) {
+  if (!canMutateDrive.value) return;
+  setDriveClipboard('cut', clipOne(row));
+  ElMessage.success('已剪切（粘贴后将从原位置移除）');
+}
+
+/**
+ * @param {string} targetDir 不含首尾斜杠，'' 表示根
+ * @param {string} baseName
+ * @param {Set<string>} reserved
+ * @param {string | null} excludePath 剪切时与源路径相同视为可占用
+ */
+function uniqueDestRel(targetDir, baseName, reserved, excludePath) {
+  const join = (dir, name) => (dir ? `${dir}/${name}` : name);
+  let stem = baseName;
+  let ext = '';
+  const dot = baseName.lastIndexOf('.');
+  if (dot > 0 && dot < baseName.length - 1) {
+    stem = baseName.slice(0, dot);
+    ext = baseName.slice(dot);
+  }
+  let n = 0;
+  for (;;) {
+    const name = n === 0 ? baseName : `${stem} (${n})${ext}`;
+    const rel = join(targetDir, name);
+    const occupied = reserved.has(rel);
+    if (!occupied) return rel;
+    if (excludePath && rel === excludePath) return rel;
+    n += 1;
+    if (n > 500) throw new Error('无法生成不冲突的文件名');
+  }
+}
+
+async function pasteIntoDirectory(targetDir) {
+  if (!hasDriveClipboard.value || !canMutateDrive.value) {
+    ElMessage.warning('剪贴板为空或当前账号不可写入');
+    return;
+  }
+  const mode = driveClipboard.mode;
+  const items = [...driveClipboard.items];
+  if (!items.length) return;
+
+  const reserved = new Set(files.value.map((f) => f.path));
+  /** @type {{ item: typeof items[0], destRel: string }[]} */
+  const plan = [];
+  for (const item of items) {
+    const baseName = item.name || (item.path.includes('/') ? item.path.slice(item.path.lastIndexOf('/') + 1) : item.path);
+    const exclude = mode === 'cut' ? item.path : null;
+    const destRel = uniqueDestRel(targetDir, baseName, reserved, exclude);
+    if (mode === 'cut' && destRel === item.path) {
+      ElMessage.warning(`已跳过与源相同的路径：${item.path}`);
+      continue;
+    }
+    reserved.add(destRel);
+    plan.push({ item, destRel });
+  }
+  if (!plan.length) return;
+
+  pasteBusy.value = true;
+  try {
+    for (const { item, destRel } of plan) {
+      const destName = destRel.includes('/') ? destRel.slice(destRel.lastIndexOf('/') + 1) : destRel;
+      const dir = destRel.includes('/') ? destRel.slice(0, destRel.lastIndexOf('/')) : '';
+      const ctrl = createTransferTask({ type: 'upload', name: destName });
+      try {
+        const res = await http.get('/api/raw', { params: { path: item.path }, responseType: 'blob' });
+        const blob = res.data;
+        const file = new File([blob], destName, { type: blob.type || 'application/octet-stream' });
+        const fd = new FormData();
+        fd.append('file', file);
+        if (dir) fd.append('path', `${dir}/`);
+        await http.post('/api/upload', fd, {
+          timeout: 300000,
+          onUploadProgress(ev) {
+            const total = ev.total != null && ev.total > 0 ? ev.total : null;
+            ctrl.updateProgress(ev.loaded, total);
+          },
+        });
+        if (blob && typeof blob.size === 'number' && blob.size > 0) {
+          ctrl.updateProgress(blob.size, blob.size);
+        }
+        ctrl.success();
+      } catch (e) {
+        const msg = e?.response?.data?.error || e?.message || '粘贴失败';
+        ctrl.fail(typeof msg === 'string' ? msg : '粘贴失败');
+        throw e;
+      }
+    }
+
+    if (mode === 'cut') {
+      for (const { item } of plan) {
+        await http.delete('/api/file', { params: { path: item.path } });
+      }
+    }
+    clearDriveClipboard();
+    ElMessage.success('粘贴完成');
+    await loadFiles();
+  } catch {
+    /* 已提示 */
+  } finally {
+    pasteBusy.value = false;
+  }
+}
+
+async function pasteIntoToolbarDir() {
+  await pasteIntoDirectory(uploadSubfolder.value.trim());
+}
+
+function openProps(row) {
+  propsRow.value = row;
+  propsOpen.value = true;
+}
+
+function openCtx(x, y) {
+  ctxX.value = x;
+  ctxY.value = y;
+  ctxOpen.value = true;
+}
+
+function buildRowCtxItems(row) {
+  const canPrev = previewKindFor(row) !== 'none';
+  const pdir = parentDir(row.path);
+  const pLabel = pdir ? `粘贴到「${pdir}」` : '粘贴到根目录';
+  return [
+    { key: 'preview', label: '预览', icon: View, show: canPrev },
+    { key: 'download', label: '下载', icon: Download },
+    { type: 'divider' },
+    { key: 'copyI', label: '复制', icon: CopyDocument, shortcut: '内部' },
+    { key: 'cutI', label: '剪切', icon: Switch, disabled: !canMutateDrive.value },
+    {
+      key: 'pasteP',
+      label: pLabel,
+      icon: DocumentAdd,
+      disabled: !canMutateDrive.value || !hasDriveClipboard.value,
+    },
+    {
+      key: 'pasteR',
+      label: '粘贴到网盘根目录',
+      icon: FolderOpened,
+      disabled: !canMutateDrive.value || !hasDriveClipboard.value,
+    },
+    { type: 'divider' },
+    { key: 'copyPath', label: '复制路径', icon: DocumentCopy },
+    { key: 'copyName', label: '复制文件名', icon: DocumentCopy },
+    { key: 'setDir', label: '将上传子目录设为所在文件夹', icon: FolderOpened },
+    { type: 'divider' },
+    { key: 'props', label: '属性', icon: InfoFilled },
+    { type: 'divider' },
+    { key: 'delete', label: '删除', icon: Delete, danger: true, disabled: !canMutateDrive.value },
+  ];
+}
+
+function buildBlankCtxItems() {
+  const sub = uploadSubfolder.value.trim();
+  const subLabel = sub ? `粘贴到「${sub}」` : '粘贴到当前子目录（根）';
+  return [
+    {
+      key: 'pasteT',
+      label: subLabel,
+      icon: DocumentAdd,
+      disabled: !canMutateDrive.value || !hasDriveClipboard.value,
+    },
+    {
+      key: 'pasteR',
+      label: '粘贴到网盘根目录',
+      icon: FolderOpened,
+      disabled: !canMutateDrive.value || !hasDriveClipboard.value,
+    },
+    { type: 'divider' },
+    { key: 'reload', label: '刷新', icon: RefreshRight },
+  ];
+}
+
+function onRowContextMenu(row, _col, e) {
+  e.preventDefault();
+  e.stopPropagation();
+  ctxRow.value = row;
+  ctxItems.value = buildRowCtxItems(row);
+  openCtx(e.clientX, e.clientY);
+}
+
+function onTableWrapContextMenu(e) {
+  if (e.target.closest?.('.el-table__row')) return;
+  ctxRow.value = null;
+  ctxItems.value = buildBlankCtxItems();
+  openCtx(e.clientX, e.clientY);
+}
+
+function onCtxPick(key) {
+  const row = ctxRow.value;
+  if (key === 'reload') {
+    loadFiles();
+    return;
+  }
+  if (key === 'pasteT') {
+    pasteIntoDirectory(uploadSubfolder.value.trim());
+    return;
+  }
+  if (key === 'pasteR') {
+    pasteIntoDirectory('');
+    return;
+  }
+  if (!row) return;
+  if (key === 'preview') openPreview(row);
+  else if (key === 'download') downloadFile(row);
+  else if (key === 'copyI') doCopyInternal(row);
+  else if (key === 'cutI') doCutInternal(row);
+  else if (key === 'pasteP') pasteIntoDirectory(parentDir(row.path));
+  else if (key === 'copyPath') copyPath(row);
+  else if (key === 'copyName') copyFileName(row);
+  else if (key === 'setDir') {
+    uploadSubfolder.value = parentDir(row.path);
+    ElMessage.success(uploadSubfolder.value ? `已设为：${uploadSubfolder.value}` : '已设为根目录');
+  } else if (key === 'props') openProps(row);
+  else if (key === 'delete') removeFile(row);
+}
 function onMobileCardTap(row) {
   if (previewKindFor(row) !== 'none') {
     openPreview(row);
@@ -606,7 +935,16 @@ function onMobileCommand(cmd, row) {
   if (cmd === 'preview') openPreview(row);
   else if (cmd === 'download') downloadFile(row);
   else if (cmd === 'copy') copyPath(row);
-  else if (cmd === 'delete') removeFile(row);
+  else if (cmd === 'copyName') copyFileName(row);
+  else if (cmd === 'copyInternal') doCopyInternal(row);
+  else if (cmd === 'cutInternal') doCutInternal(row);
+  else if (cmd === 'pasteParent') pasteIntoDirectory(parentDir(row.path));
+  else if (cmd === 'pasteRoot') pasteIntoDirectory('');
+  else if (cmd === 'props') openProps(row);
+  else if (cmd === 'setTarget') {
+    uploadSubfolder.value = parentDir(row.path);
+    ElMessage.success(uploadSubfolder.value ? `已设为：${uploadSubfolder.value}` : '已设为根目录');
+  } else if (cmd === 'delete') removeFile(row);
 }
 
 async function removeFile(row) {
@@ -1024,6 +1362,51 @@ html.dark .title {
 .site-footer__mark {
   font-size: 12px;
   color: var(--el-text-color-placeholder);
+}
+
+.clip-tag {
+  max-width: min(280px, 40vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.props-dl {
+  margin: 0;
+}
+
+.props-row {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 8px 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  font-size: 13px;
+}
+
+.props-row:last-child {
+  border-bottom: 0;
+}
+
+.props-row dt {
+  margin: 0;
+  color: var(--el-text-color-secondary);
+  font-weight: 500;
+}
+
+.props-row dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.props-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.props-break {
+  word-break: break-all;
 }
 
 @media (max-width: 767px) {
