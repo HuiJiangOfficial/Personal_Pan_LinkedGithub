@@ -21,6 +21,7 @@ export async function onRequestGet(context) {
         guestEnabled: Boolean(data.guestEnabled),
         guestPaths: Array.isArray(data.guestPaths) ? data.guestPaths : [],
         allowRegistration: data.allowRegistration !== false,
+        ignoreGitkeep: data.ignoreGitkeep !== false,
       })
     );
   } catch (e) {
@@ -51,6 +52,7 @@ export async function onRequestPatch(context) {
       data.guestPaths = body.guestPaths.map((p) => String(p || '').replace(/^\/+/, '').trim()).filter(Boolean);
     }
     if (typeof body.allowRegistration === 'boolean') data.allowRegistration = body.allowRegistration;
+    if (typeof body.ignoreGitkeep === 'boolean') data.ignoreGitkeep = body.ignoreGitkeep;
     await saveUserStore(cfg, data, sha);
     return withCors(
       request,
@@ -59,6 +61,7 @@ export async function onRequestPatch(context) {
         guestEnabled: Boolean(data.guestEnabled),
         guestPaths: data.guestPaths,
         allowRegistration: data.allowRegistration !== false,
+        ignoreGitkeep: data.ignoreGitkeep !== false,
       })
     );
   } catch (e) {

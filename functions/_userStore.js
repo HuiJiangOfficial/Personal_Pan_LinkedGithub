@@ -10,6 +10,8 @@ export function defaultUserStore() {
     guestEnabled: false,
     guestPaths: /** @type {string[]} */ ([]),
     allowRegistration: true,
+    /** 为 true 时列表 API 不返回名为 .gitkeep 的文件（目录占位） */
+    ignoreGitkeep: true,
     users: /** @type {{ username: string, role: 'user', salt: string, hash: string, iterations?: number, createdAt: string }[]} */ ([]),
   };
 }
@@ -42,6 +44,7 @@ export async function loadUserStore(cfg) {
   if (!data || typeof data !== 'object') throw new Error('users.json 格式错误');
   if (!Array.isArray(data.users)) data.users = [];
   if (!Array.isArray(data.guestPaths)) data.guestPaths = [];
+  if (typeof data.ignoreGitkeep !== 'boolean') data.ignoreGitkeep = true;
   return { data, sha: meta.sha };
 }
 

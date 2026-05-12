@@ -1,6 +1,6 @@
 /**
  * GET /api/list
- * 需登录；访客仅能看到 guestPaths 白名单内文件；隐藏 .webpan 系统目录
+ * 需登录；访客仅能看到 guestPaths 白名单内文件；隐藏 .webpan；可按设置隐藏 .gitkeep
  */
 import { readEnv, assertEnv, jsonResponse, withCors, githubFetch, githubErrorBody } from '../_utils.js';
 import { getSession } from '../_session.js';
@@ -18,12 +18,11 @@ export async function onRequestGet(context) {
   bad = await assertDriveRole(cfg, session);
   if (bad) return withCors(request, bad);
 
-  let guestStore = null;
-  if (session.role === 'guest') {
-    guestStore = (await loadUserStore(cfg)).data;
-  }
-
   try {
+    const { data: store } = await loadUserStore(cfg);
+    const guestStore = session.role === 'guest' ? store : null;
+    const hideGitkeep = store.ignoreGitkeep !== false;
+
     const branchRes = await githubFetch(
       cfg,
       `/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/branches/${encodeURIComponent(cfg.branch)}`
@@ -71,6 +70,10 @@ export async function onRequestGet(context) {
         };
       })
       .filter((f) => !isSystemDrivePath(f.path));
+
+    if (hideGitkeep) {
+      files = files.filter((f) => f.name !== '.gitkeep');
+    }
 
     if (session.role === 'guest' && guestStore) {
       files = files.filter((f) => guestMayReadPath(guestStore, f.path));

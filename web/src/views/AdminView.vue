@@ -21,6 +21,10 @@
               @blur="saveGuestPaths"
             />
           </el-form-item>
+          <el-form-item label="隐藏 .gitkeep">
+            <el-switch v-model="settings.ignoreGitkeep" @change="saveSettings" />
+            <span class="field-hint">开启后网盘列表不显示名为 <code>.gitkeep</code> 的文件（目录占位）；关闭后可在列表中查看、删除。</span>
+          </el-form-item>
         </el-form>
       </el-tab-pane>
 
@@ -69,7 +73,7 @@ import { http } from '@/api/http.js';
 const router = useRouter();
 const tab = ref('s');
 const users = ref([]);
-const settings = reactive({ guestEnabled: false, allowRegistration: true, guestPaths: [] });
+const settings = reactive({ guestEnabled: false, allowRegistration: true, guestPaths: [], ignoreGitkeep: true });
 const guestPathsText = ref('');
 const saving = ref(false);
 const dlgAdd = ref(false);
@@ -89,6 +93,7 @@ async function loadAll() {
     users.value = u.data.users || [];
     settings.guestEnabled = Boolean(s.data.guestEnabled);
     settings.allowRegistration = s.data.allowRegistration !== false;
+    settings.ignoreGitkeep = s.data.ignoreGitkeep !== false;
     settings.guestPaths = Array.isArray(s.data.guestPaths) ? s.data.guestPaths : [];
     guestPathsText.value = settings.guestPaths.join('\n');
   } catch {
@@ -102,6 +107,7 @@ async function saveSettings() {
     await http.patch('/api/admin/settings', {
       guestEnabled: settings.guestEnabled,
       allowRegistration: settings.allowRegistration,
+      ignoreGitkeep: settings.ignoreGitkeep,
     });
     ElMessage.success('已保存');
   } catch {
@@ -205,5 +211,18 @@ async function removeUser(row) {
 }
 .mb8 {
   margin-bottom: 8px;
+}
+.field-hint {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.5;
+}
+.field-hint code {
+  font-size: 11px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--el-fill-color-light);
 }
 </style>
