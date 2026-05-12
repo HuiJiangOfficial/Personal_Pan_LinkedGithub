@@ -20,6 +20,14 @@
       "hash": "d0d1265ce8ccc770b71809755732f792d8dbc48db3e59a48d760972cb1c8f0c1",
       "iterations": 100000,
       "createdAt": "2026-05-12T03:12:04.992Z"
+    },
+    {
+      "username": "xxxy",
+      "role": "user",
+      "salt": "dc23febd238d299161b1a4c527d4597e",
+      "hash": "f6d4864d6fe0582fe927e33a2cada03183ecedfe83f8779d2fc517cad2632489",
+      "iterations": 100000,
+      "createdAt": "2026-05-12T03:12:40.645Z"
     }
   ]
 }
