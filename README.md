@@ -6,6 +6,12 @@
 
 
 
+# **本项目仅供个人交流学习使用，严禁滥用、严禁存放不符合您所在地区法律规范的文件、严禁存放不符合互联网规范的文件、严禁商用与侵占公共资源、严禁售卖，严谨存放大量文件为仓库服务器造成压力。**
+
+# **免责声明：本项目不提供任何服务器，且不能给项目贡献者带来任何收益。本项目所带来的风险由克隆者自行承担。**
+
+
+
 # **部署指南请阅读[Guide(CN).md](https://github.com/HuiJiangOfficial/Personal_Pan_LinkedGithub/blob/main/Guide(CN).md)**
 
 
@@ -38,7 +44,7 @@
 
 
 
-## **以下部署教程为简略教程，详细教程请阅读[Guide.md](https://github.com/HuiJiangOfficial/Personal_Pan_LinkedGithub/blob/main/Guide.md)**
+## **以下部署教程为简略教程，详细教程请阅读[Guide(CN).md](https://github.com/HuiJiangOfficial/Personal_Pan_LinkedGithub/blob/main/Guide(CN).md)**
 
 ## 一、准备 GitHub
 
