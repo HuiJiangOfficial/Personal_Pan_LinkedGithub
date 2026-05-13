@@ -13,15 +13,15 @@
 
 export default {
   /** GitHub 用户名或组织名 */
-  GITHUB_OWNER: 'HuiJiangOfficial',
+  GITHUB_OWNER: 'Your_GitHub_Username',
 
   /** 仓库名（本仓库，需包含 /drive 目录） */
-  GITHUB_REPO: 'Personal_Pan_LinkedGithub',
+  GITHUB_REPO: 'Your_GitHub_Repo',
 
   /**
    * 分支名，默认 main；若仓库默认分支不同请修改
    */
-  GITHUB_BRANCH: 'main',
+  GITHUB_BRANCH: 'Your_GitHub_Branch',
 
   /**
    * GitHub Personal Access Token（classic）
