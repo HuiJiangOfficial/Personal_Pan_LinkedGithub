@@ -2,6 +2,10 @@
 
 ## This is a personal cloud storage deployment solution that uses GitHub repository as the storage server and builds WebUI via Cloudflare (Cloudflare Pages + Functions). 
 
+## [Click here to view the English version of README.](https://github.com/HuiJiangOfficial/Personal_Pan_LinkedGithub/blob/main/README(EN).md)
+
+
+
 基于 **GitHub 仓库 `drive/` 目录** 作为存储、**Cloudflare Pages + Pages Functions** 提供 API 与跨域支持的轻量个人网盘。前端为 **Vue 3 + Vite + Element Plus**，无数据库。
 
 
