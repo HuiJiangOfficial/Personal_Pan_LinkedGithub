@@ -16,9 +16,7 @@
 
 ## **部署指南请阅读[Guide(CN).md](https://github.com/HuiJiangOfficial/Personal_Pan_LinkedGithub/blob/main/Guide(CN).md)**
 
-
-
-WebUI展示：
+[跳转至功能概览]: ./README.md	"功能概览"
 
 ## 功能概览
 
@@ -43,6 +41,40 @@ WebUI展示：
 ├── wrangler.toml       # Pages 配置与非机密环境变量 [vars]（机密仅控制台 / secret）
 └── README.md
 ```
+
+## WebUI展示：
+
+### 1）文件管理
+
+<img src="./readme_images/AdminWeb.png" style="zoom: 67%;" />
+
+### 2）图片文件预览
+
+![](./readme_images/ImagePreviewFunction.png)
+
+### 2)深色模式
+
+<img src="./readme_images/AdminWebDark.png" style="zoom: 50%;" />
+
+### 3）背景图设置
+
+<img src="./readme_images/BG_Setting.png" style="zoom:50%;" />
+
+### 4）文件上传动画
+
+<img src="./readme_images/ProgressBar.png" style="zoom: 67%;" />
+
+### 5）文件右键菜单
+
+<img src="./readme_images/Right-click_Menu_File.png" style="zoom:50%;" />
+
+### 6)管理员后台
+
+<img src="./readme_images/Admin_UI.png" style="zoom:67%;" />
+
+### 7）管理员用户管理
+
+![](./readme_images/UserManage.png)
 
 
 
